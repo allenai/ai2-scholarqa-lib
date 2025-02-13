@@ -45,7 +45,7 @@ These components are encapsulated in the [PaperFinder](https://github.com/allena
 
   iii. _Summary Generation_ -  Each section is generated based on the quotes assigned to that section and all the prior text generated in the report. [Prompt](https://github.com/allenai/ai2-scholarqa-lib/blob/345b101e16d1dd62517fbd2df5f2ad6d8065af93/api/scholarqa/llms/prompts.py#L97)
   
-  These steps are encapsulated in the [MultiStepQAPipeline](https://github.com/allenai/ai2-scholarqa-lib/blob/345b101e16d1dd62517fbd2df5f2ad6d8065af93/api/scholarqa/rag/multi_step_qa_pipeline.py#L50C7-L50C26) class.
+  These steps are encapsulated in the [MultiStepQAPipeline](https://github.com/allenai/ai2-scholarqa-lib/blob/345b101e16d1dd62517fbd2df5f2ad6d8065af93/api/scholarqa/rag/multi_step_qa_pipeline.py#L50C7-L50C26) class. For some sections, we also generate literature review tables that compare and contrast all papers referenced in that section. We generate these tables using the pipeline proposed by the [ArxivDIGESTables paper](https://arxiv.org/pdf/2410.22360), which is available [here](https://github.com/bnewm0609/arxivDIGESTables/tree/main). 
 
 Both the PaperFinder and MultiStepQAPipeline are in turn members of [ScholarQA](https://github.com/allenai/ai2-scholarqa-lib/blob/41eb8374a88b5edfda7306519a8d61f6c225493f/api/scholarqa/scholar_qa.py#L27), which is the main class powering our system.
 
