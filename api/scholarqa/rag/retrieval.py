@@ -60,6 +60,8 @@ class PaperFinder(AbsPaperFinder):
                 paper_snippets[corpus_id]["sentences"] = []
             if snippet["stype"] != "public_api":
                 paper_snippets[corpus_id]["sentences"].append(snippet)
+            if "paperId" in paper_snippets[corpus_id]:
+                del paper_snippets[corpus_id]["paperId"]
             paper_snippets[corpus_id]["relevance_judgement"] = max(
                 paper_snippets[corpus_id].get("relevance_judgement", -1),
                 snippet.get("rerank_score", snippet["score"]))
@@ -121,8 +123,8 @@ class PaperFinder(AbsPaperFinder):
             inplace=True,
         )
 
-        # drop corpusId, paperId,
-        df = df.drop(columns=["corpusId", "paperId"])
+        # drop corpusId
+        df = df.drop(columns=["corpusId"])
 
         # now we need the big relevance_judgment_input_expanded
         # top of it
