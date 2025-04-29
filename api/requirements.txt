@@ -18,7 +18,7 @@ requests
 bs4
 fuzzy-match
 googlesearch-python
-openai==1.61.0
+openai==1.69.0
 tqdm
 google-cloud-storage==2.18.2
 filelock==3.16.1
