@@ -1,6 +1,6 @@
 import logging
 from abc import abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import pandas as pd
 
@@ -22,17 +22,25 @@ class AbsPaperFinder(AbstractRetriever):
 class PaperFinder(AbsPaperFinder):
     snippet_srch_fields = ["text", "snippetKind", "snippetOffset", "section", "annotations.refMentions",
                            "annotations.sentences.start","annotations.sentences.end"]
-    def __init__(self, retriever: AbstractRetriever, context_threshold: float = 0.0, n_rerank: int = -1):
+    def __init__(self, retriever: AbstractRetriever, context_threshold: float = 0.0, n_rerank: int = -1, max_date: Optional[str] = None):
         self.retriever = retriever
         self.context_threshold = context_threshold
         self.n_rerank = n_rerank
+        self.max_date = max_date
 
     def retrieve_passages(self, query: str, **filter_kwargs) -> List[Dict[str, Any]]:
         """Retrieve relevant passages along with scores from an index for the given query"""
-        filter_kwargs.update({"fields": ",".join([f"snippet.{f}" for f in self.snippet_srch_fields])})
+        filter_kwargs.update({
+            "fields": ",".join([f"snippet.{f}" for f in self.snippet_srch_fields])
+        })
+        if self.max_date:
+            filter_kwargs.update({"insertedBefore": ':{}'.format(self.max_date)})
         return self.retriever.retrieve_passages(query, **filter_kwargs)
 
     def retrieve_additional_papers(self, query: str, **filter_kwargs) -> List[Dict[str, Any]]:
+        if self.max_date:
+            # S2 API doesnt have insertedBefore for this endpoint, so use publicationDateOrYear:
+            filter_kwargs.update({"publicationDateOrYear": ':{}'.format(self.max_date)})
         return self.retriever.retrieve_additional_papers(query, **filter_kwargs)
 
     def rerank(self, query: str, retrieved_ctxs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
