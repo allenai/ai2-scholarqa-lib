@@ -32,7 +32,7 @@ dependencies = [
     "numpy",
     "pandas",
     "requests",
-    "openai==1.61.0",
+    "openai==1.69.0",
     "bs4",
     "fuzzy-match",
     "googlesearch-python",
