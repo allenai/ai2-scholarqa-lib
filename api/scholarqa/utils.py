@@ -118,6 +118,8 @@ def query_s2_api(
 
 
 def get_paper_metadata(corpus_ids: Set[str], fields=METADATA_FIELDS) -> Dict[str, Any]:
+    if not corpus_ids:
+        return {}
     paper_data = query_s2_api(
         end_pt="paper/batch",
         params={
