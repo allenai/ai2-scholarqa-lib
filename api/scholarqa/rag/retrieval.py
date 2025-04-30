@@ -34,7 +34,7 @@ class PaperFinder(AbsPaperFinder):
             "fields": ",".join([f"snippet.{f}" for f in self.snippet_srch_fields])
         })
         if self.max_date:
-            filter_kwargs.update({"insertedBefore": ':{}'.format(self.max_date)})
+            filter_kwargs.update({"insertedBefore": '{}'.format(self.max_date)})
         return self.retriever.retrieve_passages(query, **filter_kwargs)
 
     def retrieve_additional_papers(self, query: str, **filter_kwargs) -> List[Dict[str, Any]]:
@@ -160,8 +160,8 @@ class PaperFinder(AbsPaperFinder):
 
 class PaperFinderWithReranker(PaperFinder):
     def __init__(self, retriever: AbstractRetriever, reranker: AbstractReranker, n_rerank: int = -1,
-                 context_threshold: float = 0.5):
-        super().__init__(retriever, context_threshold, n_rerank)
+                 context_threshold: float = 0.5, max_date: Optional[str] = None):
+        super().__init__(retriever, context_threshold, n_rerank, max_date=max_date)
         if reranker:
             self.reranker_engine = reranker
         else:
