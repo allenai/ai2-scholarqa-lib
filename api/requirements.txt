@@ -22,7 +22,7 @@ openai==1.69.0
 tqdm
 google-cloud-storage==2.18.2
 filelock==3.16.1
-litellm==1.51.3
+litellm==1.63.14
 pandas==2.2.2
 diskcache==5.6.3
 langsmith==0.1.140

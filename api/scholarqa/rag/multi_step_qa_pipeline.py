@@ -85,8 +85,7 @@ class MultiStepQAPipeline:
             response = llm_completion(user_prompt=user_prompt,
                                       system_prompt=sys_prompt, fallback=None, model=self.llm_model,
                                       max_tokens=4096,
-                                      response_format={"response_schema": ClusterPlan.model_json_schema(
-                                          ref_template="/$defs/{model}")}
+                                      response_format=ClusterPlan
                                       )
         except Exception as e:
             logger.warning(f"Error while clustering with {self.llm_model}: {e}, trying to fall back to GPT-4o.")

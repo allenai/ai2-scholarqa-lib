@@ -69,7 +69,7 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
     fallbacks = [fallback] if fallback else []
     messages = [trim_messages([{"role": "system", "content": system_prompt}, {"role": "user", "content": msg}], model)
                 for msg in messages]
-    responses = litellm.batch_completion(messages=messages, model=model, fallbacks=fallbacks, **llm_lite_params)
+    responses = litellm.batch_completion(messages=messages, model=model, **llm_lite_params)
     results = []
     for i, res in enumerate(responses):
         try:
@@ -96,7 +96,7 @@ def llm_completion(user_prompt: str, system_prompt: str = None, fallback=GPT_4o,
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
-    response = litellm.completion(messages=messages, fallbacks=fallbacks, **llm_lite_params)
+    response = litellm.completion(messages=messages, **llm_lite_params)
     try:
         res_cost = round(litellm.completion_cost(response), 6)
     except Exception as e:
