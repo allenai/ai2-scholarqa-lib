@@ -67,7 +67,8 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
     CompletionResult]:
     """returns the result from the llm chat completion api with cost and tokens used"""
     fallbacks = [fallback] if fallback else []
-    messages = [trim_messages([{"role": "system", "content": system_prompt}, {"role": "user", "content": msg}], model)
+    messages = [trim_messages([{"role": "system", "content": system_prompt}, {"role": "user", "content": msg}], model,
+                              max_tokens=4096)
                 for msg in messages]
     responses = litellm.batch_completion(messages=messages, model=model, **llm_lite_params)
     results = []
@@ -80,6 +81,14 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
 
         res_usage = res.usage
         res_str = res["choices"][0]["message"]["content"].strip()
+        json_start = res_str.find("{")
+        json_end = res_str.rfind("}") + 1
+        if json_start != -1 and json_end != -1:
+            try:
+                res_str = res_str[json_start:json_end]
+            except Exception as e:
+                logger.warning(f"Error parsing JSON from response: {e}")
+                res_str = res_str.strip()
         cost_tuple = CompletionResult(content=res_str, model=res["model"],
                                       cost=res_cost if not res.get("cache_hit") else 0.0,
                                       input_tokens=res_usage.prompt_tokens,
@@ -108,6 +117,14 @@ def llm_completion(user_prompt: str, system_prompt: str = None, fallback=GPT_4o,
     if res_str is None:
         logger.warning("Content returned as None, checking for response in tool_calls...")
         res_str = response["choices"][0]["message"]["tool_calls"][0].function.arguments
+    json_start = res_str.find("{")
+    json_end = res_str.rfind("}") + 1
+    if json_start != -1 and json_end != -1:
+        try:
+            res_str = res_str[json_start:json_end]
+        except Exception as e:
+            logger.warning(f"Error parsing JSON from response: {e}")
+            res_str = res_str.strip()
     cost_tuple = CompletionResult(content=res_str.strip(), model=response.model,
                                   cost=res_cost if not response.get("cache_hit") else 0.0,
                                   input_tokens=res_usage.prompt_tokens,
