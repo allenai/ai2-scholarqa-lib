@@ -31,6 +31,8 @@ class TableGenerator:
         original_query: str, 
         section_title: str, 
         corpus_ids: List[int],
+        column_num: int = 10,
+        run_subselection: bool = True,
         column_model: Optional[str] = GPT_4o,
         value_model: Optional[str] = GPT_4o,
     ) -> TableWidget:
@@ -44,7 +46,9 @@ class TableGenerator:
         # Step 1: Construct a query for the column suggestion tool using
         # the section title and original user query as input. Also create
         # a cost argument object to allow the the tool to track costs
-        column_suggestion_query = f"{section_title}, a section included in an answer to the question: {original_query}"
+        column_suggestion_query = f"{section_title}"
+        if original_query != "":
+            column_suggestion_query += f", a section included in an answer to the question: {original_query}"
         cost_args = CostReportingArgs(
             task_id=thread_id,
             user_id=user_id,
@@ -57,6 +61,7 @@ class TableGenerator:
             query=column_suggestion_query,
             model=column_model,
             llm_caller=self.llm_caller,
+            column_num=column_num,
         )
         
         # Step 2: Create a new table data structure with suggested columns.
@@ -122,7 +127,8 @@ class TableGenerator:
             ))
             table.cells = {k: v for d in new_cells for k, v in d.items()}
 
-        table = self.subselect_columns_and_rows(table)
+        if run_subselection:
+            table = self.subselect_columns_and_rows(table)
 
         return table
     
