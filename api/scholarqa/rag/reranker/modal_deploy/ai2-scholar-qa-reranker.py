@@ -1,12 +1,10 @@
 # ## Setup
 
 import os
-import time
-
-import modal
 import threading
-
+import time
 from typing import List
+import modal
 
 MODEL_NAME = "mixedbread-ai/mxbai-rerank-large-v1"
 MODEL_DIR = f"/root/models/{MODEL_NAME}"
