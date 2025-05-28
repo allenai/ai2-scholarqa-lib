@@ -24,7 +24,7 @@ dependencies = [
     "python-json-logger==2.0.4",
     "uvicorn[standard]",
     "nora_lib==1.0.0",
-    "modal==0.67.40",
+    "modal==1.0.2",
     "pandas",
     "jsonlines",
     "googlesearch-python",
