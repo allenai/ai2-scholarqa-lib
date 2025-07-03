@@ -417,7 +417,7 @@ class ScholarQA:
             logger.info(
                 "Received table generation request for topic: " + payload["section_title"]
             )
-            table = self.table_generator.run_table_generation(
+            table, costs = self.table_generator.run_table_generation(
                 thread_id=payload["task_id"],
                 user_id=payload["user_id"],
                 original_query=payload["query"],
