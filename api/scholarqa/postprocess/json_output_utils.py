@@ -111,7 +111,8 @@ def get_json_summary(llm_model: str, summary_sections: List[str], summary_quotes
     sections = []
     llm_name_parts = llm_model.split("/", maxsplit=1)
     llm_ref_format = f'<Model name="{llm_name_parts[0].capitalize()}" version="{llm_name_parts[1]}">'
-    inline_citation_quotes = {k: v for incite in summary_quotes.values() for k, v in
+    summary_quotes = {anyascii(k): v for k, v in summary_quotes.items()}
+    inline_citation_quotes = {anyascii(k): v for incite in summary_quotes.values() for k, v in
                               incite["inline_citations"].items()}
     for sec in summary_sections:
         curr_section = get_section_text(sec)

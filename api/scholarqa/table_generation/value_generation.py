@@ -28,7 +28,8 @@ def get_cost_object(completion: CompletionResult) -> dict:
         "tokens": {
             "total": completion.total_tokens,
             "prompt": completion.input_tokens,
-            "completion": completion.output_tokens
+            "completion": completion.output_tokens,
+            "reasoning": completion.reasoning_tokens
         },
         "model": completion.model,
     }
@@ -186,14 +187,16 @@ def run_paper_qa(
                 method=llm_completion,
                 **value_generation_params,
             )
+            # print(json.loads(output.result.content))
             response_simplified = {
                 "question": question,
-                "answer": output.result.content,
+                "answer": json.loads(output.result.content)["answer"],
                 "corpusId": corpus_id,
                 "source": "vespa-snippets",
-                "evidenceId": None, # TODO: Figure out what to do here?
+                "evidenceId": json.loads(output.result.content).get("exceprts", []),
                 "cost": get_cost_object(output.result),
             }
+            # print(response_simplified)
         else:
             response, cost = get_value_from_abstract(
                 question=question, 
@@ -312,7 +315,7 @@ def generate_value_suggestions(
         }
         if evidence_ids and k in evidence_ids:
             cell_value['metadata'] = {
-                "evidenceId": evidence_ids[k],
+                "evidence": evidence_ids[k],
             }
         cell_values.append(cell_value)
     
@@ -324,7 +327,7 @@ def generate_value_suggestions(
             }
             if evidence_ids and k in evidence_ids:
                 cell_value['metadata'] = {
-                    "evidenceId": evidence_ids[k],
+                    "evidence": evidence_ids[k],
                 }
             cell_values.append(cell_value)
 

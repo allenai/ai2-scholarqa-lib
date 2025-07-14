@@ -11,7 +11,7 @@ from scholarqa.llms.constants import GPT_4o
 from scholarqa.llms.litellm_helper import batch_llm_completion, llm_completion
 from scholarqa.llms.prompts import USER_PROMPT_PAPER_LIST_FORMAT, USER_PROMPT_QUOTE_LIST_FORMAT, \
     PROMPT_ASSEMBLE_NO_QUOTES_SUMMARY
-from scholarqa.utils import CompletionResult
+from scholarqa.llms.constants import CompletionResult
 
 logger = logging.getLogger(__name__)
 

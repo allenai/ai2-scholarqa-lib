@@ -31,6 +31,8 @@ class TableGenerator:
         original_query: str, 
         section_title: str, 
         corpus_ids: List[int],
+        column_num: int = 10,
+        run_subselection: bool = True,
         column_model: Optional[str] = GPT_4o,
         value_model: Optional[str] = GPT_4o,
     ) -> TableWidget:
@@ -44,7 +46,9 @@ class TableGenerator:
         # Step 1: Construct a query for the column suggestion tool using
         # the section title and original user query as input. Also create
         # a cost argument object to allow the the tool to track costs
-        column_suggestion_query = f"{section_title}, a section included in an answer to the question: {original_query}"
+        column_suggestion_query = f"{section_title}"
+        if original_query != "":
+            column_suggestion_query += f", a section included in an answer to the question: {original_query}"
         cost_args = CostReportingArgs(
             task_id=thread_id,
             user_id=user_id,
@@ -57,7 +61,9 @@ class TableGenerator:
             query=column_suggestion_query,
             model=column_model,
             llm_caller=self.llm_caller,
+            column_num=column_num,
         )
+        column_cost = output.get("cost", {})
         
         # Step 2: Create a new table data structure with suggested columns.
         # While creating a column, also create requests to call the value
@@ -114,17 +120,27 @@ class TableGenerator:
             ])
 
         # Step 4: Run value generation requests for all columns in parallel and add cells to the table
+        all_cell_costs = []
         with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            new_cells = list(executor.map(
+            output = list(executor.map(
                 self.generate_values,  
                 itertools.repeat(row_id_map),
                 value_gen_requests,
             ))
-            table.cells = {k: v for d in new_cells for k, v in d.items()}
+            for item in output:
+                new_cells = item.get("cells", {})
+                cell_costs = item.get("cost", {})
+                table.cells.update(new_cells)
+                all_cell_costs.append(cell_costs)
 
-        table = self.subselect_columns_and_rows(table)
+        if run_subselection:
+            table = self.subselect_columns_and_rows(table)
+        final_cost_dict = {
+            "column_cost": column_cost,
+            "cell_cost": all_cell_costs,
+        }
 
-        return table
+        return table, final_cost_dict
     
     """
     Functions to only select a subset of informative 
@@ -197,6 +213,7 @@ class TableGenerator:
         column_id = request.pop("column_id")
         output = generate_value_suggestions(**request)
         generated_values = output.get("cell_values", [])
+        cell_costs = output.get("cost", {})
         table_cells = {}
         for value in generated_values:
             cell_id = f"{row_id_map[int(value['corpusId'])]}_{column_id}"
@@ -207,4 +224,8 @@ class TableGenerator:
                 metadata=value.get('metadata', None),
             )
             table_cells[cell_id] = cell
-        return table_cells
+        output ={
+            "cells": table_cells,
+            "cost": cell_costs, 
+        }
+        return output

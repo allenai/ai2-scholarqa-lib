@@ -9,8 +9,10 @@ CLAUDE_37_SONNET = "anthropic/claude-3-7-sonnet-20250219"
 LLAMA_405_TOGETHER_AI = "together_ai/meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
 
 CompletionResult = namedtuple("CompletionCost",
-                              ["content", "model", "cost", "input_tokens", "output_tokens", "total_tokens"])
+                              ["content", "model", "cost", "input_tokens", "output_tokens", "total_tokens", "reasoning_tokens"])
 
 CostReportingArgs = namedtuple("CostReportingArgs", ["task_id", "user_id", "msg_id", "description", "model"])
 
-CostAwareLLMResult = namedtuple("CostAwareLLMResult", ["result", "tot_cost", "models"])
+TokenUsage = namedtuple("TokenUsage", ["input", "output", "total", "reasoning"])
+
+CostAwareLLMResult = namedtuple("CostAwareLLMResult", ["result", "tot_cost", "models", "tokens"])

@@ -1,12 +1,12 @@
 import os
 from abc import ABC, abstractmethod
 from time import time
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Union, Tuple
 from uuid import uuid5, UUID
 
 from nora_lib.tasks.state import IStateManager, StateManager
 
-from scholarqa.llms.constants import CompletionResult, CostReportingArgs
+from scholarqa.llms.constants import CompletionResult, CostReportingArgs, TokenUsage
 from scholarqa.models import TaskResult, TaskStep, AsyncTaskState, ToolRequest
 
 UUID_NAMESPACE = os.getenv("UUID_ENCODER_KEY", "ai2-scholar-qa")
@@ -55,8 +55,15 @@ class LocalStateMgrClient(AbsStateMgrClient):
     def get_state_mgr(self, tool_req: Optional[ToolRequest] = None) -> IStateManager:
         return self.state_mgr
 
-    def report_llm_usage(self, completion_costs: List[CompletionResult], cost_args: CostReportingArgs) -> float:
-        return sum([cost.cost for cost in completion_costs])
+    def report_llm_usage(self, completion_costs: List[CompletionResult], cost_args: CostReportingArgs) -> Union[float, Tuple[float, TokenUsage]]:
+        tot_cost = sum([cost.cost for cost in completion_costs])
+        token_usage = TokenUsage(
+            input=sum([cost.input_tokens for cost in completion_costs]),
+            output=sum([cost.output_tokens for cost in completion_costs]),
+            total=sum([cost.total_tokens for cost in completion_costs]),
+            reasoning=sum([cost.reasoning_tokens for cost in completion_costs])
+        )
+        return tot_cost, token_usage
 
     def init_task(self, task_id: str, tool_request: ToolRequest):
         try:

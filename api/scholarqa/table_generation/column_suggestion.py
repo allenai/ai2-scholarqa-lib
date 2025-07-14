@@ -44,12 +44,12 @@ def format_paper_info(paper_info: Dict) -> str:
     return formatted_paper_info
 
 
-def generate_final_prompt(query: str, formatted_paper_info: str) -> str:
+def generate_final_prompt(query: str, formatted_paper_info: str, column_num: str) -> str:
     """
     Given the formatted paper information, and an optional user query,
     generate the final column suggestion prompt to be sent to the LLM.
     """
-    final_prompt = ATTRIBUTE_PROMPT.format(query, 10, formatted_paper_info)
+    final_prompt = ATTRIBUTE_PROMPT.format(query, column_num, formatted_paper_info)
     return final_prompt
 
 
@@ -57,6 +57,7 @@ def generate_attribute_suggestions(
         corpus_ids: List[str], 
         model: str = GPT_4o, 
         query: str = None,
+        column_num: int = 10,
         llm_caller: CostAwareLLMCaller = None,
         cost_args: CostReportingArgs = None,
     ) -> Dict:
@@ -74,7 +75,7 @@ def generate_attribute_suggestions(
     formatted_paper_info = format_paper_info(paper_info)
     
     # Step 4: Produce final column generation prompt from papers and user query
-    final_prompt = generate_final_prompt(user_query, formatted_paper_info)
+    final_prompt = generate_final_prompt(user_query, formatted_paper_info, column_num)
 
     # Step 5: Prompt the LLM to produce column suggestions
     column_suggestion_params = {
@@ -94,7 +95,8 @@ def generate_attribute_suggestions(
         "tokens": {
             "total": output.result.total_tokens,
             "prompt": output.result.input_tokens,
-            "completion": output.result.output_tokens
+            "completion": output.result.output_tokens,
+            "reasoning": output.result.reasoning_tokens
         },
         "model": output.result.model,
     }
