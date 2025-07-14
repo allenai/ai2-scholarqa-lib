@@ -11,8 +11,8 @@ from anyascii import anyascii
 from langsmith import traceable
 
 from scholarqa.config.config_setup import LogsConfig
-from scholarqa.llms.constants import CostAwareLLMResult, GPT_4o
-from scholarqa.llms.litellm_helper import CLAUDE_37_SONNET, CostAwareLLMCaller, CostReportingArgs
+from scholarqa.llms.constants import CostAwareLLMResult, GPT_4o, CLAUDE_4_SONNET
+from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
 from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, CitationSrc
 from scholarqa.postprocess.json_output_utils import get_json_summary
@@ -39,7 +39,7 @@ class ScholarQA:
             # Required for webapp since a new process is created for each request, for library task_id can be None initially and assigned for each request as below
             paper_finder: PaperFinder,
             task_id: str = None,
-            llm_model: str = CLAUDE_37_SONNET,
+            llm_model: str = CLAUDE_4_SONNET,
             multi_step_pipeline: MultiStepQAPipeline = None,
             state_mgr: AbsStateMgrClient = None,
             logs_config: LogsConfig = None,

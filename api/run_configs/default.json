@@ -14,8 +14,8 @@
     },
     "reranker_service": "modal",
     "reranker_args": {
-      "app_name": "modal_app_name",
-      "api_name": "modal_api_name",
+      "app_name": "ai2-scholar-qa-update",
+      "api_name": "inference_api",
       "batch_size": 256,
       "gen_options": {}
     },
@@ -25,9 +25,9 @@
     },
     "pipeline_args": {
       "validate": true,
-      "llm": "anthropic/claude-3-7-sonnet-20250219",
-      "fallback_llm": "openai/gpt-4o",
-      "decomposer_llm": "anthropic/claude-3-7-sonnet-20250219"
+      "llm": "anthropic/claude-sonnet-4-20250514",
+      "fallback_llm": "openai/gpt-4.1",
+      "decomposer_llm": "anthropic/claude-sonnet-4-20250514"
     }
   }
 }
