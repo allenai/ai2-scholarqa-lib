@@ -25,7 +25,7 @@
     },
     "pipeline_args": {
       "validate": true,
-      "llm": "anthropic/claude-sonnet-4-20250514",
+      "llm_model": "anthropic/claude-sonnet-4-20250514",
       "fallback_llm": "openai/gpt-4.1",
       "decomposer_llm": "anthropic/claude-sonnet-4-20250514"
     }
