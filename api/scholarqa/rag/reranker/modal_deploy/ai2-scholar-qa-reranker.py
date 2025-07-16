@@ -1,16 +1,14 @@
 # ## Setup
 
 import os
-import time
-
-import modal
 import threading
-
+import time
 from typing import List
+import modal
 
 MODEL_NAME = "mixedbread-ai/mxbai-rerank-large-v1"
 MODEL_DIR = f"/root/models/{MODEL_NAME}"
-GPU_CONFIG = modal.gpu.L4(count=1)
+GPU_CONFIG = "L4:1"
 
 APP_NAME = "<modal_app_name>"
 APP_LABEL = APP_NAME.lower()
@@ -60,7 +58,7 @@ reranker_image = (
         "hf-transfer==0.1.6",
         "huggingface_hub==0.23.4",
         "sentence-transformers==3.0.1",
-        "peft"
+        "peft==0.13.2"
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
     .run_function(
@@ -72,7 +70,7 @@ reranker_image = (
             "model_name": MODEL_NAME,
         },
     )
-    .add_local_python_source("reranker")
+    .add_local_python_source("custom_cross_encoder")
 )
 
 with reranker_image.imports():
@@ -93,11 +91,11 @@ app = modal.App(APP_NAME)
 @app.cls(
     gpu=GPU_CONFIG,
     timeout=60 * 20,
-    container_idle_timeout=60 * 20,
-    keep_warm=2,
-    allow_concurrent_inputs=1,
+    scaledown_window=60 * 20,
+    min_containers=2,
     image=reranker_image
 )
+@modal.concurrent(max_inputs=1)
 class Model:
     @modal.enter()
     def start_engine(self):
@@ -167,11 +165,11 @@ api_image = (
 
 @app.function(
     image=api_image,
-    keep_warm=1,
-    allow_concurrent_inputs=20,
+    min_containers=1,
     timeout=60 * 10,
 )
-async def modal_api_name(query: str, passages: List[str], batch_size: int = 512) -> List[float]:
+@modal.concurrent(max_inputs=20)
+async def inference_api(query: str, passages: List[str], batch_size: int = 512) -> List[float]:
     model = Model()
     return model.get_scores.remote(query, passages, batch_size)
 

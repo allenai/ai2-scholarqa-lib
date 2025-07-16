@@ -6,7 +6,7 @@ pydantic==2.*
 python-json-logger==2.0.4
 uvicorn[standard]
 nora_lib==1.0.0
-modal
+modal==1.0.2
 pandas
 jsonlines
 googlesearch-python
@@ -27,3 +27,4 @@ pandas==2.2.2
 diskcache==5.6.3
 langsmith==0.1.140
 anyascii==0.3.2
+tenacity==9.1.2

@@ -79,8 +79,14 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
         fallback] if fallback else []  # Disable for now in lieu of https://github.com/BerriAI/litellm/issues/10517
     messages = [trim_messages([{"role": "system", "content": system_prompt}, {"role": "user", "content": msg}], model)
                 for msg in messages]
-    responses = litellm.completion_with_retries(messages=messages, model=model,
-                                                original_function=litellm.batch_completion, **llm_lite_params)
+    try:
+        responses = litellm.completion_with_retries(messages=messages, model=model,
+                                                    original_function=litellm.batch_completion, **llm_lite_params)
+    except Exception as e:
+        logger.warning(f"Failing over to fallback {fallback} due to {e}")
+        llm_lite_params["model"] = fallback
+        responses = litellm.completion_with_retries(messages=messages, model=model,
+                                                    original_function=litellm.batch_completion, **llm_lite_params)
     results = []
     for i, res in enumerate(responses):
         try:
@@ -112,7 +118,12 @@ def llm_completion(user_prompt: str, system_prompt: str = None, fallback=GPT_4o,
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
-    response = litellm.completion_with_retries(messages=messages, **llm_lite_params)
+    try:
+        response = litellm.completion_with_retries(messages=messages, **llm_lite_params)
+    except Exception as e:
+        logger.warning(f"Failing over to fallback {fallback} due to {e}")
+        llm_lite_params["model"] = fallback
+        response = litellm.completion_with_retries(messages=messages, **llm_lite_params)
     try:
         res_cost = round(litellm.completion_cost(response), 6)
     except Exception as e:
