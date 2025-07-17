@@ -51,9 +51,18 @@ class CrossEncoderScores(AbstractReranker):
         from sentence_transformers import CrossEncoder
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(device)
+        
+        # Optimize configuration for CPU vs GPU
+        if device == "cpu":
+            # CPU-optimized configuration
+            automodel_args = {"torch_dtype": "float32"}  # float16 can be problematic on CPU
+        else:
+            # GPU-optimized configuration
+            automodel_args = {"torch_dtype": "float16"}
+            
         self.model = CrossEncoder(
             model_name_or_path,
-            automodel_args={"torch_dtype": "float16"},
+            automodel_args=automodel_args,
             trust_remote_code=True,
             device=device,
         )
@@ -63,8 +72,28 @@ class CrossEncoderScores(AbstractReranker):
 
     def get_scores(self, query: str, passages: List[str]) -> List[float]:
         sentence_pairs = [[query, passage] for passage in passages]
-        scores = self.model.predict(sentence_pairs, convert_to_tensor=True, show_progress_bar=True,
-                                    batch_size=128).tolist()
+        
+        # Use smaller batch size for CPU to avoid memory issues and timeout
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        batch_size = 8 if device == "cpu" else 128  # Even smaller batch for CPU
+        
+        # Limit number of passages to prevent timeout (top 100 instead of all)
+        max_passages = 100 if device == "cpu" else len(passages)
+        if len(sentence_pairs) > max_passages:
+            logger.warning(f"Limiting reranking from {len(sentence_pairs)} to {max_passages} passages for CPU performance")
+            sentence_pairs = sentence_pairs[:max_passages]
+        
+        scores = self.model.predict(
+            sentence_pairs, 
+            convert_to_tensor=True, 
+            show_progress_bar=False,  # Disable progress bar to avoid log noise
+            batch_size=batch_size
+        ).tolist()
+        
+        # Pad with zeros if we limited the passages
+        if len(passages) > len(scores):
+            scores.extend([0.0] * (len(passages) - len(scores)))
+            
         return [float(s) for s in scores]
 
 

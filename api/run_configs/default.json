@@ -9,8 +9,8 @@
   "run_config": {
     "retrieval_service": "public_api",
     "retriever_args": {
-      "n_retrieval": 256,
-      "n_keyword_srch": 20
+      "n_retrieval": 100,
+      "n_keyword_srch": 10
     },
     "reranker_service": "crossencoder",
     "reranker_args": {
