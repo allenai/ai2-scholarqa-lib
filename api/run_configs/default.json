@@ -21,7 +21,7 @@
     },
     "paper_finder_args": {
       "n_rerank": 50,
-      "context_threshold": 0.5
+      "context_threshold": 0.0
     },
     "pipeline_args": {
       "validate": true,
