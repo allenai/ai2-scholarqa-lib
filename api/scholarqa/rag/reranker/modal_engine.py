@@ -47,7 +47,8 @@ class ModalEngine:
         else:
             opts = self.gen_options
 
-        fn = modal.Function.lookup(self.model_id, self.api_name, client=self.modal_client)
+        fn = modal.Function.from_name(self.model_id, self.api_name)
+        fn.hydrate(client=self.modal_client)
         return fn, opts if opts else None
 
     def generate(self, input_args: Tuple, streaming=False, **opt_kwargs) -> Union[str, List[Dict]]:

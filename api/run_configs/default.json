@@ -18,13 +18,13 @@
     },
     "paper_finder_args": {
       "n_rerank": 50,
-      "context_threshold": 0.5
+      "context_threshold": 0.0
     },
     "pipeline_args": {
       "validate": false,
-      "llm": "anthropic/claude-3-7-sonnet-20250219",
-      "fallback_llm": "openai/gpt-4o",
-      "decomposer_llm": "anthropic/claude-3-7-sonnet-20250219"
+      "llm_model": "anthropic/claude-sonnet-4-20250514",
+      "fallback_llm": "openai/gpt-4.1",
+      "decomposer_llm": "anthropic/claude-sonnet-4-20250514"
     }
   }
 }
