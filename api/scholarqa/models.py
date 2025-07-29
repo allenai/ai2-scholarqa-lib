@@ -70,7 +70,7 @@ class TaskResult(BaseModel):
         description="The generated iterations of the answer"
     )
     cost: float = Field(description="The overall cost of the task", default=0.0)
-    tokens: Dict[str, int] = Field(description="The tokens used to generate the answer")
+    tokens: Optional[Dict[str, int]] = Field(description="The tokens used to generate the answer", default=None)
 
 
 class ToolResponse(BaseModel):
