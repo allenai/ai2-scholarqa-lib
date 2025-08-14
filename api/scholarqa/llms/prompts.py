@@ -309,8 +309,8 @@ What are the effects of climate change on agricultural productivity in Sub-Sahar
     "venues": "",
     "authors": [],
     "field_of_study": "Environmental Science,Agricultural and Food Sciences",
-    "rewritten_query": "Effects on agricultural productivity in Sub-Saharan Africa.",
-    "rewritten_query_for_keyword_search": "agricultural productivity Sub-Saharan Africa"
+    "rewritten_query": "Effects of climate change on agricultural productivity in Sub-Saharan Africa.",
+    "rewritten_query_for_keyword_search": "climate change agricultural productivity Sub-Saharan Africa"
 }
 ```
 </example output #4>  
@@ -327,8 +327,8 @@ Explore the role of neural networks in solving mathematical optimization problem
     "venues": "",
     "authors": [],
     "field_of_study": "Computer Science,Mathematics",
-    "rewritten_query": "Role in solving mathematical optimization problems.",
-    "rewritten_query_for_keyword_search": "mathematical optimization problems"
+    "rewritten_query": "Role of neural networks in solving mathematical optimization problems.",
+    "rewritten_query_for_keyword_search": "neural networks mathematical optimization problems"
 }
 ```
 </example output #5>  
@@ -345,8 +345,8 @@ Discuss the historical significance of the Renaissance period on modern art and 
     "venues": "",
     "authors": [],
     "field_of_study": "Art,Philosophy",
-    "rewritten_query": "Historical significance on modern art and philosophy.",
-    "rewritten_query_for_keyword_search": "modern art philosophy"
+    "rewritten_query": "Historical significance of Renaissance on modern art and philosophy.",
+    "rewritten_query_for_keyword_search": "Renaissance modern art philosophy"
 }
 ```
 </example output #6>  
