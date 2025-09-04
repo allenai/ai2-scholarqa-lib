@@ -85,7 +85,7 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
     except Exception as e:
         logger.warning(f"Failing over to fallback {fallback} due to {e}")
         llm_lite_params["model"] = fallback
-        responses = litellm.completion_with_retries(messages=messages, model=model,
+        responses = litellm.completion_with_retries(messages=messages, model=fallback,
                                                     original_function=litellm.batch_completion, **llm_lite_params)
     results = []
     for i, res in enumerate(responses):
