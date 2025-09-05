@@ -3,6 +3,8 @@ from collections import namedtuple
 GPT_4_TURBO = "openai/gpt-4-turbo-2024-04-09"
 GPT_4o = "openai/gpt-4o-2024-08-06"
 GPT_4o_MINI = "openai/gpt-4o-mini"
+GPT_4_1 = "openai/gpt-4.1"
+GPT_5_CHAT= "openai/gpt-5-chat-latest"
 CLAUDE_3_OPUS = "anthropic/claude-3-opus-20240229"
 CLAUDE_35_SONNET = "anthropic/claude-3-5-sonnet-20241022"
 CLAUDE_37_SONNET = "anthropic/claude-3-7-sonnet-20250219"
