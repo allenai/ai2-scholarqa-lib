@@ -1,7 +1,6 @@
 import logging
-import os
 from scholarqa.llms.constants import *
-from typing import List, Any, Callable, Tuple, Iterator, Union, Generator
+from typing import List, Any, Callable, Tuple, Iterator, Union, Generator, Optional
 
 import litellm
 from litellm.caching import Cache
@@ -9,6 +8,7 @@ from litellm.utils import trim_messages
 from langsmith import traceable
 
 from scholarqa.state_mgmt.local_state_mgr import AbsStateMgrClient
+from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,8 @@ def success_callback(kwargs, completion_response, start_time, end_time):
     completion_response.cache_hit = kwargs["cache_hit"] if kwargs["cache_hit"] is not None else False
 
 
+NUM_RETRIES = 3
+RETRY_STRATEGY = "exponential_backoff"
 litellm.success_callback = [success_callback]
 
 
@@ -71,41 +73,49 @@ def setup_llm_cache(cache_type: str = "s3", **cache_args):
 
 
 @traceable(run_type="llm", name="batch completion")
-def batch_llm_completion(model: str, messages: List[str], system_prompt: str = None, fallback=GPT_4o,
-                         **llm_lite_params) -> List[
-    CompletionResult]:
+def batch_llm_completion(model: str, messages: List[str], system_prompt: str = None, fallback: Optional[str] = GPT_4o,
+                         **llm_lite_params) -> List[Optional[CompletionResult]]:
     """returns the result from the llm chat completion api with cost and tokens used"""
-    fallbacks = [
-        fallback] if fallback else []  # Disable for now in lieu of https://github.com/BerriAI/litellm/issues/10517
+    fallbacks = [f.strip() for f in fallback.split(",")] if fallback else []
     messages = [trim_messages([{"role": "system", "content": system_prompt}, {"role": "user", "content": msg}], model)
                 for msg in messages]
-    try:
-        responses = litellm.completion_with_retries(messages=messages, model=model,
-                                                    original_function=litellm.batch_completion, **llm_lite_params)
-    except Exception as e:
-        logger.warning(f"Failing over to fallback {fallback} due to {e}")
-        llm_lite_params["model"] = fallback
-        responses = litellm.completion_with_retries(messages=messages, model=model,
-                                                    original_function=litellm.batch_completion, **llm_lite_params)
-    results = []
-    for i, res in enumerate(responses):
-        try:
-            res_cost = round(litellm.completion_cost(res), 6)
-        except Exception as e:
-            logger.warning(f"Error calculating cost: {e}")
-            res_cost = 0.0
 
-        res_usage = res.usage
-        reasoning_tokens = 0 if not (res_usage.completion_tokens_details and
-                                     res_usage.completion_tokens_details.reasoning_tokens) else \
-            res_usage.completion_tokens_details.reasoning_tokens
-        res_str = res["choices"][0]["message"]["content"].strip()
-        cost_tuple = CompletionResult(content=res_str, model=res["model"],
-                                      cost=res_cost if not res.get("cache_hit") else 0.0,
-                                      input_tokens=res_usage.prompt_tokens,
-                                      output_tokens=res_usage.completion_tokens, total_tokens=res_usage.total_tokens,
-                                      reasoning_tokens=reasoning_tokens)
-        results.append(cost_tuple)
+    results, pending = [None] * len(messages), [_ for _ in range(len(messages))]
+    curr_retry = 0
+
+    #retries with exponential backoff in addition to fallbacks for pending instances
+    while pending and curr_retry <= NUM_RETRIES:
+        pending_msges = [messages[idx] for idx in pending]
+        responses = litellm.completion_with_retries(messages=pending_msges, model=model, fallbacks=fallbacks,
+                                                    retry_strategy=RETRY_STRATEGY, num_retries=NUM_RETRIES,
+                                                    original_function=litellm.batch_completion, **llm_lite_params)
+
+        for i, res in enumerate(responses):
+            try:
+                res_cost = round(litellm.completion_cost(res), 6)
+                res_usage = res.usage
+                reasoning_tokens = 0 if not (res_usage.completion_tokens_details and
+                                             res_usage.completion_tokens_details.reasoning_tokens) else \
+                    res_usage.completion_tokens_details.reasoning_tokens
+                res_str = res["choices"][0]["message"]["content"].strip()
+                cost_tuple = CompletionResult(content=res_str, model=res["model"],
+                                              cost=res_cost if not res.get("cache_hit") else 0.0,
+                                              input_tokens=res_usage.prompt_tokens,
+                                              output_tokens=res_usage.completion_tokens,
+                                              total_tokens=res_usage.total_tokens,
+                                              reasoning_tokens=reasoning_tokens)
+                results[i] = cost_tuple
+            except Exception as e:
+                if curr_retry == NUM_RETRIES:
+                    logger.error(f"Error received for instance {i} in batch llm job, no more retries left: {e}")
+                    raise e
+
+        pending = [i for i, r in enumerate(results) if not r]
+        curr_retry += 1
+        if pending:
+            logger.info(f"Retrying {len(pending)} failed instances in batch llm job, attempt {curr_retry}")
+            sleep(2 ** curr_retry)
+
     return results
 
 
@@ -113,23 +123,14 @@ def batch_llm_completion(model: str, messages: List[str], system_prompt: str = N
 def llm_completion(user_prompt: str, system_prompt: str = None, fallback=GPT_4o, **llm_lite_params) -> CompletionResult:
     """returns the result from the llm chat completion api with cost and tokens used"""
     messages = []
-    fallbacks = [
-        fallback] if fallback else []  # Disable for now in lieu of https://github.com/BerriAI/litellm/issues/10517
+    fallbacks = [f.strip() for f in fallback.split(",")] if fallback else []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
-    try:
-        response = litellm.completion_with_retries(messages=messages, **llm_lite_params)
-    except Exception as e:
-        logger.warning(f"Failing over to fallback {fallback} due to {e}")
-        llm_lite_params["model"] = fallback
-        response = litellm.completion_with_retries(messages=messages, **llm_lite_params)
-    try:
-        res_cost = round(litellm.completion_cost(response), 6)
-    except Exception as e:
-        logger.warning(f"Error calculating cost: {e}")
-        res_cost = 0.0
+    response = litellm.completion_with_retries(messages=messages, retry_strategy=RETRY_STRATEGY,
+                                               num_retries=NUM_RETRIES, fallbacks=fallbacks, **llm_lite_params)
 
+    res_cost = round(litellm.completion_cost(response), 6)
     res_usage = response.usage
     reasoning_tokens = 0 if not (res_usage.completion_tokens_details and
                                  res_usage.completion_tokens_details.reasoning_tokens) else \

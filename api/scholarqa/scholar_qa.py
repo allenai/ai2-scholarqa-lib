@@ -11,7 +11,7 @@ from anyascii import anyascii
 from langsmith import traceable
 
 from scholarqa.config.config_setup import LogsConfig
-from scholarqa.llms.constants import CostAwareLLMResult, GPT_4o, CLAUDE_4_SONNET
+from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_4_1
 from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
 from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, CitationSrc
@@ -57,7 +57,7 @@ class ScholarQA:
         self.task_id = task_id
         self.paper_finder = paper_finder
         self.llm_model = llm_model
-        fallback_llm = kwargs.get("fallback_llm", GPT_4o)
+        fallback_llm = kwargs.get("fallback_llm", f"{GPT_4_1},{CLAUDE_37_SONNET}")
         self.validate = kwargs.get("validate", "OPENAI_API_KEY" in os.environ)
         if not self.validate:
             logger.warning("Validation of the query for harmful content is turned off")
@@ -106,7 +106,7 @@ class ScholarQA:
             llm_args.update(self.llm_kwargs)
         return self.llm_caller.call_method(
             cost_args=cost_args, method=decompose_query, query=query, decomposer_llm_model=self.decomposer_llm,
-            **llm_args
+            fallback=self.multi_step_pipeline.fallback_llm, **llm_args
         )
 
     @traceable(name="Retrieval: Find relevant paper passages for the query")
