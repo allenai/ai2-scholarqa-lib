@@ -41,7 +41,7 @@ def lazy_load_state_mgr_client():
     return LocalStateMgrClient(logs_config.log_dir, "async_state")
 
 
-def lazy_load_scholarqa(task_id: str, sqa_class: Type[T] = ScholarQA, **sqa_args) -> T:
+def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Type[T] = ScholarQA, **sqa_args) -> T:
     retriever = FullTextRetriever(**run_config.retriever_args)
     if run_config.reranker_args:
         reranker = RERANKER_MAPPING[run_config.reranker_service](**run_config.reranker_args)
@@ -76,7 +76,7 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
-    scholar_qa = app_config.load_scholarqa(task_id)
+    scholar_qa = app_config.load_scholarqa(task_id, tool_request)
     return scholar_qa.run_qa_pipeline(tool_request)
 
 

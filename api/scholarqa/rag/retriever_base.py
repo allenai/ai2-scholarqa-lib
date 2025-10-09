@@ -111,4 +111,6 @@ class FullTextRetriever(AbstractRetriever):
                 pd["score"] = 0.0
                 pd["stype"] = "public_api"
                 pd["pdf_hash"] = ""
+                pd["s2FieldsOfStudy"] = [f["category"] for f in pd["s2FieldsOfStudy"] if
+                                                    f["source"] == "s2-fos-model"]
         return paper_data

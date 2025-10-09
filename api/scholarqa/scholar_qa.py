@@ -152,9 +152,9 @@ class ScholarQA:
         reranked_candidates = self.paper_finder.rerank(user_query, retrieved_candidates)
         logger.info("Reranking time: %.2f", time() - start)
         paper_metadata = filter_paper_metadata
-        paper_metadata.update(get_paper_metadata(
-            {snippet["corpus_id"] for snippet in reranked_candidates if
-             snippet["corpus_id"] not in filter_paper_metadata}))
+        remaining_ids = {snippet["corpus_id"] for snippet in reranked_candidates if snippet["corpus_id"] not in filter_paper_metadata}
+        if remaining_ids:
+            paper_metadata.update(get_paper_metadata(remaining_ids))
         agg_df = self.paper_finder.aggregate_into_dataframe(reranked_candidates, paper_metadata)
         self.update_task_state(
             f"Found {len(agg_df)} highly relevant papers after re-ranking and aggregating",
@@ -504,7 +504,7 @@ class ScholarQA:
         # Rerank the retrieved candidates based on the query with a cross encoder
         s2_srch_metadata = [{k: v for k, v in paper.items() if
                              k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS} for paper in
-                            s2_srch_res]
+                            retrieved_candidates if "s2FieldsOfStudy" in paper]
         reranked_df, paper_metadata = self.rerank_and_aggregate(query, retrieved_candidates,
                                                                 {str(paper["corpus_id"]): paper for paper in
                                                                  s2_srch_metadata})
