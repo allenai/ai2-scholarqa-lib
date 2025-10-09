@@ -95,13 +95,13 @@ class ScholarQA:
             )
 
     @traceable(name="Preprocessing: Validate and decompose user query")
-    def preprocess_query(self, query: str, cost_args: CostReportingArgs=None, ) -> CostAwareLLMResult:
+    def preprocess_query(self, query: str, cost_args: CostReportingArgs = None, ) -> CostAwareLLMResult:
         if self.validate:
             # Validate the query for harmful/unanswerable content
             validate(query)
         # Decompose the query to get filters like year, venue, fos, citations, etc along with a re-written
         # version of the query and a query suitable for keyword search.
-        llm_args = {"max_tokens": 4096*2}
+        llm_args = {"max_tokens": 4096 * 2}
         if self.llm_kwargs:
             llm_args.update(self.llm_kwargs)
         return self.llm_caller.call_method(
@@ -152,7 +152,8 @@ class ScholarQA:
         reranked_candidates = self.paper_finder.rerank(user_query, retrieved_candidates)
         logger.info("Reranking time: %.2f", time() - start)
         paper_metadata = filter_paper_metadata
-        remaining_ids = {snippet["corpus_id"] for snippet in reranked_candidates if snippet["corpus_id"] not in filter_paper_metadata}
+        remaining_ids = {snippet["corpus_id"] for snippet in reranked_candidates if
+                         snippet["corpus_id"] not in filter_paper_metadata}
         if remaining_ids:
             paper_metadata.update(get_paper_metadata(remaining_ids))
         agg_df = self.paper_finder.aggregate_into_dataframe(reranked_candidates, paper_metadata)
@@ -320,6 +321,9 @@ class ScholarQA:
 
         return quotes_metadata
 
+    def filter_metadata(self, paper_metadata: Dict[str, Any]) -> bool:
+        return True
+
     def populate_citations_metadata(self, avl_paper_metadata: Dict[str, Dict[str, Any]],
                                     paper_inline_cites: Dict[str, List],
                                     per_paper_summaries: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -358,7 +362,7 @@ class ScholarQA:
                     additional_metadata[mdata["corpusId"]]["relevance_judgement"] = max(
                         additional_metadata[mdata["corpusId"]].get("relevance_judgement", 0),
                         avl_paper_metadata[quote_cid]["relevance_judgement"])
-                if mdata.get("abstract"):
+                if self.filter_metadata(mdata) and mdata.get("abstract"):
                     per_paper_summaries[ref_str]["inline_citations"][mref_str] = mdata["abstract"]
             per_paper_summaries[ref_str]["quote"] = per_paper_summaries[ref_str]["quote"].replace("NULL, ", "")
         avl_paper_metadata.update(additional_metadata)
