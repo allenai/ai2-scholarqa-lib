@@ -18,7 +18,7 @@ S2_APIKEY = os.getenv("S2_API_KEY", "")
 S2_HEADERS = {"x-api-key": S2_APIKEY}
 S2_API_BASE_URL = "https://api.semanticscholar.org/graph/v1/"
 NUMERIC_META_FIELDS = {"year", "citationCount", "referenceCount", "influentialCitationCount"}
-CATEGORICAL_META_FIELDS = {"title", "abstract", "corpusId", "authors", "venue", "isOpenAccess", "openAccessPdf"}
+CATEGORICAL_META_FIELDS = {"title", "abstract", "corpusId", "authors", "venue", "publicationVenue", "isOpenAccess", "openAccessPdf", "s2FieldsOfStudy"}
 METADATA_FIELDS = ",".join(CATEGORICAL_META_FIELDS.union(NUMERIC_META_FIELDS))
 
 
@@ -130,6 +130,11 @@ def get_paper_metadata(corpus_ids: Set[str], fields=METADATA_FIELDS) -> Dict[str
         str(pdata["corpusId"]): {k: make_int(v) if k in NUMERIC_META_FIELDS else pdata.get(k) for k, v in pdata.items()}
         for pdata in paper_data if pdata and "corpusId" in pdata
     }
+    for pmeta in paper_metadata.values():
+        if pmeta.get("s2FieldsOfStudy"):
+            pmeta["s2FieldsOfStudy"] = [f["category"] for f in pmeta["s2FieldsOfStudy"] if f["source"]=="s2-fos-model"]
+
+
     return paper_metadata
 
 
