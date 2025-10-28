@@ -11,16 +11,35 @@ services:
     volumes:
       - ./api:/api
       - ./secret:/secret
+      - /Users/charliem/workspace/artifact-service/v1/artifacts/reports:/artifacts
     environment:
       # This ensures that errors are printed as they occur, which
       # makes debugging easier.
       - PYTHONUNBUFFERED=1
       - LITELLM_LOG=WARNING
       - CONFIG_PATH=run_configs/default.json
+      - ARTIFACT_OUTPUT_DIR=/artifacts
     ports:
       - 8000:8000
     env_file:
       - .env
+  watcher:
+    build: ./api
+    entrypoint: ["python", "-m", "scholarqa.watcher_main"]
+    volumes:
+      - ./api:/api
+      - ./secret:/secret
+      - /Users/charliem/workspace/artifact-service/v1/artifacts/reports:/artifacts
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LITELLM_LOG=WARNING
+      - CONFIG_PATH=run_configs/default.json
+      - ARTIFACT_OUTPUT_DIR=/artifacts
+      - PYTHONPATH=/api
+    env_file:
+      - .env
+    depends_on:
+      - api
   ui:
     build: ./ui
     # We can't mount the entire UI directory, since JavaScript dependencies

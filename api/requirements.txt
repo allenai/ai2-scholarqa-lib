@@ -28,3 +28,4 @@ diskcache==5.6.3
 langsmith==0.1.140
 anyascii==0.3.2
 tenacity==9.1.2
+watchdog>=3.0.0

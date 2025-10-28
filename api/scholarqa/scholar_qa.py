@@ -25,6 +25,8 @@ from scholarqa.utils import get_paper_metadata, NUMERIC_META_FIELDS, CATEGORICAL
     make_int
 from scholarqa.table_generation.table_model import TableWidget
 from scholarqa.table_generation.table_generator import TableGenerator
+from scholarqa.artifact_writer import ThreadArtifactUpdater
+from scholarqa.progress_artifact_writer import ProgressArtifactUpdater
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +47,7 @@ class ScholarQA:
             logs_config: LogsConfig = None,
             run_table_generation: bool = True,
             llm_kwargs: Dict[str, Any] = None,
+            artifact_output_dir: str = None,
             **kwargs
     ):
         if logs_config:
@@ -76,6 +79,12 @@ class ScholarQA:
         self.table_generator = TableGenerator(paper_finder=paper_finder, llm_caller=self.llm_caller)
         self.run_table_generation = run_table_generation
 
+        # Thread artifact updater for real-time updates
+        self.artifact_path = kwargs.get("artifact_path")
+        self.message_id = kwargs.get("message_id")
+        self.artifact_writer = None  # Will be initialized when task_id is set
+        self.progress_writer = None  # Will be initialized when task_id is set
+
     def update_task_state(
             self,
             status: str,
@@ -93,6 +102,10 @@ class ScholarQA:
                 curr_response,
                 task_estimated_time,
             )
+
+        # Update progress artifact if configured
+        if self.progress_writer:
+            self.progress_writer.add_step(status)
 
     @traceable(name="Preprocessing: Validate and decompose user query")
     def preprocess_query(self, query: str, cost_args: CostReportingArgs = None, ) -> CostAwareLLMResult:
@@ -400,7 +413,24 @@ class ScholarQA:
             raise e
 
     def postprocess_json_output(self, json_summary: List[Dict[str, Any]], **kwargs) -> None:
-        pass
+        """
+        Hook to postprocess the JSON output.
+        Called incrementally as sections are generated and once more with final version.
+        Override this method to write artifacts or perform custom processing.
+        """
+        # Update thread artifact if updater is configured
+        if self.artifact_writer:
+            try:
+                report_title = getattr(self, 'report_title', 'ScholarQA Report')
+                quotes_meta = kwargs.get('quotes_meta', {})
+                self.artifact_writer.write_artifact(
+                    json_summary=json_summary,
+                    report_title=report_title,
+                    quotes_metadata=quotes_meta
+                )
+                logger.info(f"Thread artifact updated: report version {self.artifact_writer.report_version}")
+            except Exception as e:
+                logger.error(f"Error updating thread artifact: {e}")
 
     def answer_query(self, query: str, inline_tags: bool = True) -> Dict[str, Any]:
         task_id = str(uuid4())
@@ -473,6 +503,24 @@ class ScholarQA:
         self.tool_request = req
         self.update_task_state("Processing user query", task_estimated_time="~3 minutes", step_estimated_time=5)
         task_id = self.task_id if self.task_id else req.task_id
+
+        # Initialize thread artifact updater if path and message_id are configured
+        if self.artifact_path and self.message_id and not self.artifact_writer:
+            self.artifact_writer = ThreadArtifactUpdater(
+                artifact_path=self.artifact_path,
+                message_id=self.message_id,
+                task_id=task_id
+            )
+            logger.info(f"Initialized thread artifact updater for task {task_id}")
+
+            # Also initialize progress writer
+            self.progress_writer = ProgressArtifactUpdater(
+                artifact_path=self.artifact_path,
+                message_id=self.message_id,
+                task_id=task_id
+            )
+            logger.info(f"Initialized progress artifact updater for task {task_id}")
+
         user_id, msg_id = self.get_user_msg_id()
         msg_id = task_id if not msg_id else msg_id
         query = req.query

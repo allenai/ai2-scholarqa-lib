@@ -49,8 +49,15 @@ def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Typ
     else:
         paper_finder = PaperFinder(retriever, **run_config.paper_finder_args)
 
+    # Configure artifact output directory
+    artifact_output_dir = os.environ.get(
+        "ARTIFACT_OUTPUT_DIR",
+        "/Users/charliem/workspace/artifact-service/v1/artifacts/reports"
+    )
+
     return sqa_class(paper_finder=paper_finder, task_id=task_id, state_mgr=app_config.state_mgr_client,
-                     logs_config=logs_config, **run_config.pipeline_args, **sqa_args)
+                     logs_config=logs_config, artifact_output_dir=artifact_output_dir,
+                     **run_config.pipeline_args, **sqa_args)
 
 
 # setup logging config and local litellm cache
