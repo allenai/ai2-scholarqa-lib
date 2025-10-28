@@ -93,12 +93,13 @@ export const Results: React.FC<PropType> = (props) => {
     }
   }, [taskRunning, history, taskId, status?.query, httpStatus, setHistory])
   const sections = status?.task_result?.sections ?? [];
+  const reportTitle = status?.task_result?.report_title;
 
   return (
     <>
       <Typography variant="h3" sx={{ marginBottom: '16px' }}>{status?.query ?? ''}</Typography>
       {sections.length > 0 && (
-        <Sections sections={sections} taskId={taskId} cookieUserId={cookieUserId} />
+        <Sections sections={sections} taskId={taskId} cookieUserId={cookieUserId} reportTitle={reportTitle} />
       )}
       {(taskRunning || httpStatus !== 200) && <StepProgress {...progressProps} />}
     </>
