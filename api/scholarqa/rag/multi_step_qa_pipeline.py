@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from enum import Enum
-from typing import Tuple, Dict, List, Any, Generator
+from typing import Tuple, Dict, List, Any, Generator, Optional
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -37,7 +37,7 @@ class ClusterPlan(BaseModel):
     cot: str = Field(default=None, description=(
         "The justification for every dimension name and its format"
     ))
-    report_title: str = Field(default=None, description=(
+    report_title: Optional[str] = Field(default=None, description=(
         "A concise title of the report based on the user query and the dimensions"
     ))
     dimensions: List[Dimension] = Field(default=None, description=(
