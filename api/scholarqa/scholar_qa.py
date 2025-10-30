@@ -72,6 +72,7 @@ class ScholarQA:
             self.multi_step_pipeline = multi_step_pipeline
 
         self.tool_request = None
+        self.report_title = None
         self.table_llm = kwargs.get("table_llm", self.llm_model)
         self.table_generator = TableGenerator(paper_finder=paper_finder, llm_caller=self.llm_caller)
         self.run_table_generation = run_table_generation
@@ -82,7 +83,6 @@ class ScholarQA:
             step_estimated_time: int = 0,
             curr_response: List[GeneratedSection] = None,
             task_estimated_time: str = None,
-            report_title: str = None,
     ):
         logger.info(status)
         if self.task_id and self.tool_request:
@@ -93,7 +93,7 @@ class ScholarQA:
                 step_estimated_time,
                 curr_response,
                 task_estimated_time,
-                report_title,
+                self.report_title,
             )
 
     @traceable(name="Preprocessing: Validate and decompose user query")
@@ -555,7 +555,7 @@ class ScholarQA:
         outline = '\n    - ' + '\n    - '.join(section_titles)
         self.update_task_state(f"Start generating each section in the answer outline: {outline}",
                                task_estimated_time=f"~{task_estimated_time} minutes" if task_estimated_time > 1 else "~1 minute",
-                               step_estimated_time=15, report_title=self.report_title)
+                               step_estimated_time=15)
 
         try:
             gen_iter = gen_sections_iter
@@ -564,7 +564,7 @@ class ScholarQA:
                 if idx < len(plan_json):
                     self.update_task_state(
                         f"Iteratively generating section: {(idx + 1)} of {len(plan_json)} - {section_titles[idx]}",
-                        curr_response=generated_sections, step_estimated_time=15, report_title=self.report_title)
+                        curr_response=generated_sections, step_estimated_time=15)
                 section_text = next(gen_iter)
                 section_json = \
                     get_json_summary(self.multi_step_pipeline.llm_model, [section_text], per_paper_summaries_extd,
@@ -588,7 +588,7 @@ class ScholarQA:
             all_sections = e.value
 
         self.update_task_state(f"Generating comparison tables", curr_response=generated_sections,
-                               step_estimated_time=20, report_title=self.report_title)
+                               step_estimated_time=20)
 
         start = time()
         for tthread in table_threads:
