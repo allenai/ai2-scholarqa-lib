@@ -66,6 +66,7 @@ class GeneratedSection(BaseModel):
 # TODO: define your result data
 class TaskResult(BaseModel):
     """The outcome of running a Task to completion"""
+    report_title: Optional[str] = Field(default=None, description="The title of the generated report")
     sections: List[GeneratedSection] = Field(
         description="The generated iterations of the answer"
     )

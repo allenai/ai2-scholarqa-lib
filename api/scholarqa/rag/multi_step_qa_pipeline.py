@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from enum import Enum
-from typing import Tuple, Dict, List, Any, Generator
+from typing import Tuple, Dict, List, Any, Generator, Optional
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -36,6 +36,9 @@ class Dimension(BaseModel):
 class ClusterPlan(BaseModel):
     cot: str = Field(default=None, description=(
         "The justification for every dimension name and its format"
+    ))
+    report_title: Optional[str] = Field(default=None, description=(
+        "A concise title of the report based on the user query and the dimensions"
     ))
     dimensions: List[Dimension] = Field(default=None, description=(
         "The list of dimensions along with the associated quote indices as per the cot plan"
@@ -87,12 +90,13 @@ class MultiStepQAPipeline:
 
         user_prompt = make_prompt(query, per_paper_summaries)
         try:
-            #params for reasoning mode: max_completion_tokens=4096, max_tokens=4096+1024, reasoning_effort="low"
+            # params for reasoning mode: max_completion_tokens=4096, max_tokens=4096+1024, reasoning_effort="low"
             response = llm_completion(user_prompt=user_prompt,
                                       system_prompt=sys_prompt, fallback=self.fallback_llm, model=self.llm_model,
                                       response_format= ClusterPlan, **self.llm_kwargs
                                       )
-            return json.loads(response.content), response
+            parsed_result = json.loads(response.content)
+            return parsed_result, response
         except Exception as e:
             logger.warning(f"Error while clustering with {self.llm_model}: {e}")
             raise e

@@ -115,6 +115,7 @@ export type AsyncTaskState = AsyncTaskStateCompleted | AsyncTaskStateRunning;
  * The outcome of running a Task to completion
  */
 export interface TaskResult {
+  report_title?: string | null;
   sections: Sections;
   [k: string]: unknown;
 }

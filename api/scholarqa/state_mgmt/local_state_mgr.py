@@ -28,6 +28,7 @@ class AbsStateMgrClient(ABC):
             step_estimated_time: int = 0,
             curr_response: Any = None,
             task_estimated_time: str = None,
+            report_title: str = None,
     ):
         state_mgr = self.get_state_mgr(tool_req)
         curr_step = TaskStep(description=status, start_timestamp=time())
@@ -38,7 +39,7 @@ class AbsStateMgrClient(ABC):
         if task_estimated_time:
             task_state.estimated_time = task_estimated_time
         if curr_response:
-            task_state.task_result = TaskResult(sections=curr_response)
+            task_state.task_result = TaskResult(sections=curr_response, report_title=report_title)
         task_state.extra_state["steps"].append(curr_step)
         state_mgr.write_state(task_state)
 

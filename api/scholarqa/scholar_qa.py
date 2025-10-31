@@ -72,6 +72,7 @@ class ScholarQA:
             self.multi_step_pipeline = multi_step_pipeline
 
         self.tool_request = None
+        self.report_title = None
         self.table_llm = kwargs.get("table_llm", self.llm_model)
         self.table_generator = TableGenerator(paper_finder=paper_finder, llm_caller=self.llm_caller)
         self.run_table_generation = run_table_generation
@@ -92,6 +93,7 @@ class ScholarQA:
                 step_estimated_time,
                 curr_response,
                 task_estimated_time,
+                self.report_title,
             )
 
     @traceable(name="Preprocessing: Validate and decompose user query")
@@ -526,6 +528,7 @@ class ScholarQA:
 
         # step 2: outline planning and clustering
         cluster_json = self.step_clustering(query, per_paper_summaries.result, cost_args)
+        self.report_title = cluster_json.result.get("report_title")
         # Changing to expected format in the summary generation prompt
         plan_json = {f'{dim["name"]} ({dim["format"]})': dim["quotes"] for dim in cluster_json.result["dimensions"]}
         if not any([len(d) for d in plan_json.values()]):
@@ -605,4 +608,4 @@ class ScholarQA:
         self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
         event_trace.trace_summary_event(json_summary, all_sections, tcosts)
         event_trace.persist_trace(self.logs_config)
-        return TaskResult(sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)

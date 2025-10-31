@@ -14,7 +14,7 @@
     },
     "reranker_service": "modal",
     "reranker_args": {
-      "app_name": "ai2-scholar-qa-update",
+      "app_name": "ai2-scholar-qa",
       "api_name": "inference_api",
       "batch_size": 256,
       "gen_options": {}

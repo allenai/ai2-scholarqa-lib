@@ -49,6 +49,12 @@ For user queries that are simpler, you only need one dimension.
 For example, if the query is "I want a list of alternatives to GPT-3" or "Give me a table of GPT-3 alternatives", then there is only dimension "List of Alternatives to GPT-3".
 """
 
+REPORT_TITLE_DIRECTIVE = """When generating a report title,use both the user query and the dimensions. 
+The title should be no more than 15 words, and should either be a noun phrase or begin with a gerund which emphasizes the core concepts of the report.
+Be neutral and objective, avoiding adjectives describing report characteristics. For example, if the user query is
+"What are the latest developments in AI?", the title should be "Latest Developments in AI", not "A Comprehensive Review of the Latest Developments in AI".
+."""
+
 SYSTEM_PROMPT_QUOTE_CLUSTER = f"""
 In this task, you are presented with quoted passages that were collected from a set of papers.
 The goal is to fuse all those quotes into a summary answer/report that satisfies the user query in an easy-to-consume format.
@@ -70,9 +76,12 @@ IMPORTANT: Some sections may not have any quotes to support them. Include them i
 
 Choose list or synthesis with deep care and wisdom. Start with a markdown justification for the section name and its format.
 
+{REPORT_TITLE_DIRECTIVE}
+
 The last thing you output is an assignment of each quote to a dimension like so:  
 {{
 "cot": "Justification for every dimension name and its format...",
+"report_title": "Title of the report based on the user query and the dimensions",
 "dimensions": [{{"name": "dimension name 1", "format": "synthesis or list", "quotes": [comma-delimited highlights indices]}},
 {{"name": "dimension name 2", "format": "synthesis or list", "quotes": [comma-delimited highlights indices]}},
 {{"name": "dimension name 3", "format": "synthesis or list", "quotes": []}},  # empty because we didn't find any supporting quotes

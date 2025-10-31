@@ -10,10 +10,11 @@ interface PropType {
   sections: SectionsType;
   taskId: string;
   cookieUserId: string;
+  reportTitle?: string | null;
 }
 
 export const Sections: React.FC<PropType> = (props) => {
-  const { sections, taskId, cookieUserId } = props
+  const { sections, taskId, cookieUserId, reportTitle } = props
 
   const [open, setOpen] = React.useState(false);
   const [openShare, setOpenShare] = React.useState(false);
@@ -34,12 +35,18 @@ export const Sections: React.FC<PropType> = (props) => {
           <Typography sx={{ fontSize:'14px', fontStyle: 'italic', opacity: '0.8', marginLeft:'6px' }}>Are these answers helpful?</Typography>
           <MessageFeedbackComp darkMode taskId={taskId} userId={cookieUserId} section={null} />
         </Box>
-        
+
         <Box sx={{ display: 'flex' }}>
           <Button onClick={handleShare}>Share</Button>
           <Button onClick={handleModalOpen}>Disclaimer</Button>
         </Box>
       </Box>
+
+      {reportTitle && (
+        <Typography variant="h5" sx={{ marginBottom: '24px', marginTop: '8px', fontWeight: 500, color: 'white' }}>
+          {reportTitle}
+        </Typography>
+      )}
 
       <SectionsInner sections={sections} taskId={taskId} cookieUserId={cookieUserId} />
 
