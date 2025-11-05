@@ -77,7 +77,13 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     to write back.
     """
     scholar_qa = app_config.load_scholarqa(task_id, tool_request)
-    return scholar_qa.run_qa_pipeline(tool_request)
+
+    # Route to appropriate pipeline based on edit_existing flag
+    if tool_request.edit_existing:
+        logger.info(f"Routing to edit pipeline for thread {tool_request.thread_id}")
+        return scholar_qa.run_edit_pipeline(tool_request)
+    else:
+        return scholar_qa.run_qa_pipeline(tool_request)
 
 
 def _estimate_task_length(tool_request: ToolRequest) -> str:
