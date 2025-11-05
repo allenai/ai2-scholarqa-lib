@@ -15,9 +15,11 @@ from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE
 from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
 from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, CitationSrc
+from scholarqa.models_edit import SearchDecision, EditPlan, SectionEditPlan, EditAction, EditResult
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.preprocess.query_preprocessor import validate, decompose_query, LLMProcessedQuery
 from scholarqa.rag.multi_step_qa_pipeline import MultiStepQAPipeline
+from scholarqa.rag.edit_pipeline import EditPipeline
 from scholarqa.rag.retrieval import PaperFinder
 from scholarqa.state_mgmt.local_state_mgr import AbsStateMgrClient, LocalStateMgrClient
 from scholarqa.trace.event_traces import EventTrace
@@ -76,6 +78,9 @@ class ScholarQA:
         self.table_llm = kwargs.get("table_llm", self.llm_model)
         self.table_generator = TableGenerator(paper_finder=paper_finder, llm_caller=self.llm_caller)
         self.run_table_generation = run_table_generation
+
+        # Initialize edit pipeline
+        self.edit_pipeline = EditPipeline(self.llm_model, fallback_llm=fallback_llm, **self.llm_kwargs)
 
     def update_task_state(
             self,
@@ -609,3 +614,308 @@ class ScholarQA:
         event_trace.trace_summary_event(json_summary, all_sections, tcosts)
         event_trace.persist_trace(self.logs_config)
         return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+
+    @traceable(run_type="tool", name="ai2_scholar_qa_edit_trace")
+    def run_edit_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+        """
+        Edit an existing report based on user instructions.
+
+        This function implements the edit workflow:
+        1. Retrieve the current report from state manager using thread_id
+        2. Step 1a: Decide if new search is needed
+        3. Step 1b: Conditionally run search and rerank
+        4. Step 2: Generate per-section edit plan
+        5. Step 3: Execute edits section by section
+        6. Post-process and update citations
+
+        :param req: Tool request with edit_existing=True, thread_id, edit_instruction, mentioned_papers
+        :param inline_tags: Whether to include inline <paper> tags in the output
+        :return: Updated TaskResult
+        """
+        self.tool_request = req
+        self.update_task_state("Processing edit request", task_estimated_time="~2 minutes", step_estimated_time=5)
+
+        # Validate edit request
+        if not req.edit_instruction:
+            raise ValueError("edit_instruction is required for edit workflow")
+        if not req.thread_id:
+            raise ValueError("thread_id is required to fetch the current report")
+
+        task_id = self.task_id if self.task_id else req.task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
+
+        logger.info(
+            f"Received edit request for thread {req.thread_id}: {req.edit_instruction} "
+            f"from user_id: {user_id}"
+        )
+
+        # Step 0: Retrieve current report from state manager
+        self.update_task_state("Retrieving current report", step_estimated_time=2)
+        current_report = self._retrieve_report_from_thread(req.thread_id)
+        if not current_report:
+            raise ValueError(f"No report found for thread_id: {req.thread_id}")
+
+        logger.info(
+            f"Retrieved report with {len(current_report.sections)} sections: "
+            f"{current_report.report_title}"
+        )
+
+        # Initialize event trace for edit workflow
+        event_trace = EventTrace(
+            task_id,
+            0,  # No initial retrieval
+            self.paper_finder.n_rerank,
+            req,
+            user_id=user_id
+        )
+
+        # Step 1a: Decide if we need to search for new papers
+        self.update_task_state("Analyzing edit requirements", step_estimated_time=10)
+        cost_args = CostReportingArgs(
+            task_id=task_id,
+            user_id=user_id,
+            description="Edit Step 1a: Decide search strategy",
+            model=self.llm_model,
+            msg_id=msg_id
+        )
+
+        search_decision, _ = self.edit_pipeline.step_decide_search(
+            current_report=current_report,
+            edit_instruction=req.edit_instruction,
+            mentioned_papers=req.mentioned_papers or [],
+        )
+
+        logger.info(
+            f"Search decision: needs_search={search_decision.needs_search}, "
+            f"query={search_decision.search_query}"
+        )
+
+        # Step 1b: Conditionally search for new papers
+        paper_metadata = {}
+        papers_data = {}
+
+        if search_decision.needs_search and search_decision.search_query:
+            self.update_task_state("Searching for additional papers", step_estimated_time=20)
+
+            # Preprocess search query
+            llm_processed_query = self.preprocess_query(search_decision.search_query, cost_args)
+
+            # Find relevant papers
+            snippet_srch_res, s2_srch_res = self.find_relevant_papers(llm_processed_query.result)
+            retrieved_candidates = snippet_srch_res + s2_srch_res
+
+            if retrieved_candidates:
+                # Rerank results
+                s2_srch_metadata = [
+                    {k: v for k, v in paper.items() if
+                     k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS}
+                    for paper in retrieved_candidates if "s2FieldsOfStudy" in paper
+                ]
+                reranked_df, paper_metadata = self.rerank_and_aggregate(
+                    search_decision.search_query,
+                    retrieved_candidates,
+                    {str(paper["corpus_id"]): paper for paper in s2_srch_metadata}
+                )
+
+                # Extract papers data for edit plan
+                if not reranked_df.empty:
+                    for _, row in reranked_df.iterrows():
+                        corpus_id = int(row["corpus_id"])
+                        papers_data[corpus_id] = {
+                            "title": row.get("title", ""),
+                            "author_str": row.get("reference_string", ""),
+                            "content": row.get("relevance_judgment_input_expanded", ""),
+                            "n_citations": row.get("citationCount", 0),
+                        }
+
+        # Fetch metadata for mentioned papers if provided
+        if req.mentioned_papers:
+            self.update_task_state("Fetching mentioned papers metadata", step_estimated_time=5)
+            mentioned_metadata = get_paper_metadata(req.mentioned_papers)
+            for corpus_id in req.mentioned_papers:
+                if str(corpus_id) in mentioned_metadata:
+                    mdata = mentioned_metadata[str(corpus_id)]
+                    papers_data[corpus_id] = {
+                        "title": mdata.get("title", ""),
+                        "author_str": get_ref_author_str(mdata.get("authors", [])),
+                        "content": mdata.get("abstract", ""),
+                        "n_citations": mdata.get("citationCount", 0),
+                    }
+                    paper_metadata[str(corpus_id)] = mdata
+
+        # Step 2: Generate edit plan
+        self.update_task_state("Generating edit plan", step_estimated_time=15)
+        cost_args = cost_args._replace(description="Edit Step 2: Generate edit plan")
+
+        edit_plan, _ = self.edit_pipeline.step_generate_edit_plan(
+            current_report=current_report,
+            edit_instruction=req.edit_instruction,
+            mentioned_papers=req.mentioned_papers or [],
+            available_papers=papers_data,
+        )
+
+        logger.info(
+            f"Edit plan generated with {len(edit_plan.section_plans)} section edits "
+            f"and {len(edit_plan.new_sections)} new sections"
+        )
+
+        # Step 3: Execute edit plan
+        self.update_task_state("Executing edits", step_estimated_time=30)
+        cost_args = cost_args._replace(description="Edit Step 3: Execute edits")
+
+        edited_sections = []
+        sections_modified = []
+        sections_deleted = []
+        papers_added = []
+
+        # Execute edits for existing sections
+        for section_plan in edit_plan.section_plans:
+            section_idx = section_plan.section_index
+            if section_idx >= len(current_report.sections):
+                logger.warning(f"Section index {section_idx} out of range, skipping")
+                continue
+
+            section = current_report.sections[section_idx]
+
+            self.update_task_state(
+                f"Editing section {section_idx + 1}: {section.title} ({section_plan.action})",
+                step_estimated_time=15
+            )
+
+            edited_section, _ = self.edit_pipeline.step_execute_section_edit(
+                section=section,
+                section_index=section_idx,
+                section_plan=section_plan,
+                full_report=current_report,
+                papers_data=papers_data,
+            )
+
+            if edited_section is None:
+                # Section was deleted
+                sections_deleted.append(section_idx)
+                logger.info(f"Deleted section {section_idx}: {section.title}")
+            else:
+                edited_sections.append(edited_section)
+                if section_plan.action != EditAction.KEEP:
+                    sections_modified.append(section_idx)
+                if section_plan.new_papers:
+                    papers_added.extend(section_plan.new_papers)
+
+        # Create new sections if requested
+        sections_added = []
+        for new_sec_info in edit_plan.new_sections:
+            section_title = new_sec_info.get("title", "New Section")
+            section_instruction = new_sec_info.get("instruction", "")
+            section_papers = new_sec_info.get("papers", [])
+
+            self.update_task_state(f"Creating new section: {section_title}", step_estimated_time=15)
+
+            new_section, _ = self.edit_pipeline.step_create_new_section(
+                section_title=section_title,
+                section_instruction=section_instruction,
+                full_report=current_report,
+                papers_data=papers_data,
+                paper_ids=section_papers,
+            )
+
+            # Insert at requested position or append
+            position = new_sec_info.get("position", len(edited_sections))
+            if 0 <= position <= len(edited_sections):
+                edited_sections.insert(position, new_section)
+                sections_added.append(position)
+            else:
+                edited_sections.append(new_section)
+                sections_added.append(len(edited_sections) - 1)
+
+            if section_papers:
+                papers_added.extend(section_papers)
+
+        # Post-process: Update citations and TLDRs
+        self.update_task_state("Post-processing edited sections", step_estimated_time=10)
+
+        # Convert sections to JSON format for citation extraction
+        json_summary = []
+        for section in edited_sections:
+            # Re-extract citations from the edited text
+            # Create a temporary papers_extd dict for this section
+            section_papers_extd = {}
+
+            # Build papers_extd from the section's citations and paper_metadata
+            for cit in section.citations:
+                corpus_id = str(cit.paper.corpus_id)
+                ref_str = cit.id
+                if corpus_id in paper_metadata:
+                    section_papers_extd[ref_str] = {
+                        "quote": "",  # Will be filled by citation extraction
+                        "inline_citations": {}
+                    }
+
+            # Use get_json_summary to extract citations from the text
+            section_json = get_json_summary(
+                self.multi_step_pipeline.llm_model,
+                [section.text],
+                section_papers_extd if section_papers_extd else {},
+                paper_metadata,
+                {},
+                inline_tags
+            )[0]
+
+            # Update the section with new citations
+            section.citations = [CitationSrc(**cit) for cit in section_json.get("citations", [])]
+            section.tldr = section_json.get("tldr", section.tldr or "")
+
+            json_summary.append(section_json)
+
+        # Create edit result summary
+        edit_result = EditResult(
+            summary=f"Edited {len(sections_modified)} section(s), "
+                   f"added {len(sections_added)} section(s), "
+                   f"deleted {len(sections_deleted)} section(s), "
+                   f"incorporated {len(set(papers_added))} new paper(s)",
+            sections_modified=sections_modified,
+            sections_added=sections_added,
+            sections_deleted=sections_deleted,
+            papers_added=list(set(papers_added)),
+        )
+
+        logger.info(f"Edit complete: {edit_result.summary}")
+
+        # Calculate total cost
+        total_cost = event_trace.total_cost
+
+        # Persist trace
+        event_trace.persist_trace(self.logs_config)
+
+        # Return updated report
+        return TaskResult(
+            report_title=current_report.report_title,
+            sections=edited_sections,
+            cost=total_cost,
+            tokens=event_trace.tokens
+        )
+
+    def _retrieve_report_from_thread(self, thread_id: str) -> TaskResult:
+        """
+        Retrieve the current report from the state manager using thread_id.
+
+        Args:
+            thread_id: The thread ID containing the report
+
+        Returns:
+            TaskResult object or None if not found
+        """
+        try:
+            # The thread_id is used as task_id in the state manager
+            state = self.state_mgr.read_state(thread_id)
+            if state and state.task_result:
+                # If task_result is already a TaskResult object, return it
+                if isinstance(state.task_result, TaskResult):
+                    return state.task_result
+                # Otherwise, convert from dict
+                elif isinstance(state.task_result, dict):
+                    return TaskResult(**state.task_result)
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving report for thread {thread_id}: {e}")
+            return None
