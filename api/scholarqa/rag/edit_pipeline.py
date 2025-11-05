@@ -1,421 +1,367 @@
 """
-Edit pipeline for modifying existing reports based on user instructions.
+Edit pipeline that mirrors MultiStepQAPipeline but handles report editing.
 
-This pipeline implements the three-step edit workflow:
-1. Decide if new search is needed
-2. Generate per-section edit plan
-3. Execute edits section by section
+This pipeline follows the same 4-step structure as the original:
+1. Quote extraction from new papers (mirrors step_select_quotes)
+2. Planning/clustering with edit context (mirrors step_clustering)
+3. Section generation with edit actions (mirrors generate_iterative_summary)
 """
 
 import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+import re
+from typing import Dict, List, Any, Tuple, Generator
+
+import pandas as pd
+from pydantic import BaseModel, Field
 
 from scholarqa.llms.constants import CompletionResult
-from scholarqa.llms.litellm_helper import llm_completion
+from scholarqa.llms.litellm_helper import batch_llm_completion, llm_completion
 from scholarqa.llms.edit_prompts import (
-    PROMPT_DECIDE_SEARCH,
-    PROMPT_GENERATE_EDIT_PLAN,
-    PROMPT_EXECUTE_SECTION_EDIT,
-    PROMPT_CREATE_NEW_SECTION,
-)
-from scholarqa.models_edit import (
-    SearchDecision,
-    EditPlan,
-    SectionEditPlan,
-    EditAction,
+    SYSTEM_PROMPT_QUOTE_PER_PAPER_EDIT,
+    USER_PROMPT_PAPER_LIST_FORMAT_EDIT,
+    SYSTEM_PROMPT_QUOTE_CLUSTER_EDIT,
+    USER_PROMPT_QUOTE_LIST_FORMAT_EDIT,
+    PROMPT_ASSEMBLE_SUMMARY_EDIT,
+    PROMPT_ASSEMBLE_NO_QUOTES_SUMMARY_EDIT,
 )
 from scholarqa.models import TaskResult, GeneratedSection
 
 logger = logging.getLogger(__name__)
 
 
+class EditClusterPlan(BaseModel):
+    """Edit-aware version of ClusterPlan that includes edit actions."""
+    cot: str = Field(description="Chain of thought for edit plan")
+    report_title: str = Field(description="Report title (existing or updated)")
+    dimensions: List[Dict[str, Any]] = Field(
+        description="List of dimensions with edit actions (KEEP, EXPAND, ADD_TO, REPLACE, DELETE, NEW)"
+    )
+
+
 class EditPipeline:
-    """Pipeline for editing existing reports based on user instructions."""
+    """
+    Pipeline for editing existing reports.
+
+    Mirrors the structure of MultiStepQAPipeline but with edit-specific logic.
+    """
 
     def __init__(
         self,
         llm_model: str,
         fallback_llm: str = None,
+        batch_workers: int = 20,
         **llm_kwargs
     ):
         self.llm_model = llm_model
         self.fallback_llm = fallback_llm
+        self.batch_workers = batch_workers
         self.llm_kwargs = {"max_tokens": 4096 * 4}
         if llm_kwargs:
             self.llm_kwargs.update(llm_kwargs)
 
-    def step_decide_search(
+    def step_select_quotes_edit(
         self,
-        current_report: TaskResult,
         edit_instruction: str,
-        mentioned_papers: List[int] = None,
-    ) -> Tuple[SearchDecision, CompletionResult]:
-        """
-        Step 1a: Decide if we need to search for new papers.
-
-        Args:
-            current_report: The current report to be edited
-            edit_instruction: The decontextualized edit instruction
-            mentioned_papers: List of corpus_ids mentioned by the user
-
-        Returns:
-            Tuple of (SearchDecision, CompletionResult)
-        """
-        logger.info("Running Edit Step 1a: Deciding if search is needed")
-
-        # Format the current report for the prompt
-        report_summary = self._format_report_summary(current_report)
-
-        # Format mentioned papers
-        papers_str = "None"
-        if mentioned_papers:
-            papers_str = ", ".join(str(pid) for pid in mentioned_papers)
-
-        # Create the prompt
-        prompt = PROMPT_DECIDE_SEARCH.format(
-            current_report=report_summary,
-            edit_instruction=edit_instruction,
-            mentioned_papers=papers_str,
-        )
-
-        try:
-            response = llm_completion(
-                user_prompt=prompt,
-                model=self.llm_model,
-                fallback=self.fallback_llm,
-                response_format=SearchDecision,
-                **self.llm_kwargs
-            )
-
-            decision = SearchDecision(**json.loads(response.content))
-            logger.info(
-                f"Search decision: needs_search={decision.needs_search}, "
-                f"query={decision.search_query}"
-            )
-            return decision, response
-
-        except Exception as e:
-            logger.error(f"Error in step_decide_search: {e}")
-            raise
-
-    def step_generate_edit_plan(
-        self,
         current_report: TaskResult,
-        edit_instruction: str,
-        mentioned_papers: List[int] = None,
-        available_papers: Dict[str, Any] = None,
-    ) -> Tuple[EditPlan, CompletionResult]:
+        scored_df: pd.DataFrame,
+    ) -> Tuple[Dict[str, str], List[CompletionResult]]:
         """
-        Step 2: Generate a per-section edit plan.
+        STEP 1: Extract quotes from papers (mirrors MultiStepQAPipeline.step_select_quotes)
+
+        Extended with edit context: current report sections and edit instruction.
 
         Args:
-            current_report: The current report to be edited
-            edit_instruction: The decontextualized edit instruction
-            mentioned_papers: List of corpus_ids mentioned by the user
-            available_papers: Dict of corpus_id -> paper info (from search or mentioned)
+            edit_instruction: The user's edit instruction
+            current_report: The current report being edited
+            scored_df: DataFrame with papers (from search or mentioned_papers)
 
         Returns:
-            Tuple of (EditPlan, CompletionResult)
-        """
-        logger.info("Running Edit Step 2: Generating edit plan")
-
-        # Format sections summary
-        sections_summary = self._format_sections_summary(current_report.sections)
-
-        # Format mentioned papers
-        papers_str = "None"
-        if mentioned_papers:
-            papers_str = ", ".join(str(pid) for pid in mentioned_papers)
-
-        # Format available papers
-        available_papers_str = "None"
-        if available_papers:
-            available_papers_str = self._format_available_papers(available_papers)
-
-        # Create the prompt
-        prompt = PROMPT_GENERATE_EDIT_PLAN.format(
-            report_title=current_report.report_title or "Research Report",
-            sections_summary=sections_summary,
-            edit_instruction=edit_instruction,
-            mentioned_papers=papers_str,
-            available_papers=available_papers_str,
-        )
-
-        try:
-            response = llm_completion(
-                user_prompt=prompt,
-                model=self.llm_model,
-                fallback=self.fallback_llm,
-                response_format=EditPlan,
-                **self.llm_kwargs
-            )
-
-            plan = EditPlan(**json.loads(response.content))
-            logger.info(
-                f"Edit plan generated with {len(plan.section_plans)} section plans "
-                f"and {len(plan.new_sections)} new sections"
-            )
-            return plan, response
-
-        except Exception as e:
-            logger.error(f"Error in step_generate_edit_plan: {e}")
-            raise
-
-    def step_execute_section_edit(
-        self,
-        section: GeneratedSection,
-        section_index: int,
-        section_plan: SectionEditPlan,
-        full_report: TaskResult,
-        papers_data: Dict[int, Dict[str, Any]] = None,
-    ) -> Tuple[Optional[GeneratedSection], CompletionResult]:
-        """
-        Step 3: Execute the edit for a single section.
-
-        Args:
-            section: The section to edit
-            section_index: Index of the section in the report
-            section_plan: The plan for editing this section
-            full_report: The full report for context
-            papers_data: Dict of corpus_id -> paper data (includes quotes/snippets)
-
-        Returns:
-            Tuple of (edited section or None if deleted, CompletionResult)
+            Tuple of (per_paper_summaries dict, completion_results list)
         """
         logger.info(
-            f"Executing edit for section {section_index}: "
-            f"{section.title} (action: {section_plan.action})"
+            f"Querying {self.llm_model} to extract quotes from papers for edit task "
+            f"with {self.batch_workers} parallel workers"
         )
 
-        # If action is "keep", return the original section unchanged
-        if section_plan.action == EditAction.KEEP:
-            logger.info(f"Keeping section {section_index} unchanged")
-            return section, None
+        # Format current report context for the prompt
+        current_sections_summary = self._format_sections_for_quote_extraction(
+            current_report.sections
+        )
+        current_report_summary = self._format_report_summary(current_report)
 
-        # If action is "delete", return None
-        if section_plan.action == EditAction.DELETE:
-            logger.info(f"Deleting section {section_index}")
-            return None, None
-
-        # For all other actions, we need to generate new content
-        # Format the section references
-        section_references = self._format_section_references(
-            section,
-            section_plan.new_papers,
-            papers_data,
+        # Create system prompt with edit context
+        sys_prompt = SYSTEM_PROMPT_QUOTE_PER_PAPER_EDIT.format(
+            current_sections_summary=current_sections_summary,
+            edit_instruction=edit_instruction
         )
 
-        # Format full report context (other sections)
-        full_report_context = self._format_report_context(
-            full_report,
-            exclude_section_index=section_index,
-        )
-
-        # Create the prompt
-        prompt = PROMPT_EXECUTE_SECTION_EDIT.format(
-            section_title=section.title,
-            section_content=section.text,
-            edit_action=section_plan.action.value,
-            specific_instruction=section_plan.specific_instruction or section_plan.reasoning,
-            full_report_context=full_report_context,
-            section_references=section_references,
-        )
-
-        try:
-            response = llm_completion(
-                user_prompt=prompt,
-                model=self.llm_model,
-                fallback=self.fallback_llm,
-                **self.llm_kwargs
+        # Prepare messages for each paper (same as original but with edit context)
+        tup_items = {
+            k: v for k, v in zip(
+                scored_df["reference_string"],
+                scored_df["relevance_judgment_input_expanded"]
             )
+        }
 
-            # Create updated section
-            edited_section = GeneratedSection(
-                title=section.title,
-                tldr=section.tldr,  # Will be regenerated in post-processing
-                text=response.content,
-                citations=section.citations,  # Will be updated in post-processing
-                table=section.table if section_plan.action != EditAction.REPLACE else None,
+        messages = [
+            USER_PROMPT_PAPER_LIST_FORMAT_EDIT.format(
+                edit_instruction=edit_instruction,
+                current_report_summary=current_report_summary,
+                paper_content=v
             )
+            for k, v in tup_items.items()
+        ]
 
-            logger.info(f"Successfully edited section {section_index}")
-            return edited_section, response
+        # Batch LLM completion (same as original)
+        completion_results = batch_llm_completion(
+            self.llm_model,
+            messages=messages,
+            system_prompt=sys_prompt,
+            max_workers=self.batch_workers,
+            fallback=self.fallback_llm,
+            **self.llm_kwargs
+        )
 
-        except Exception as e:
-            logger.error(f"Error in step_execute_section_edit: {e}")
-            raise
+        # Filter out "None" responses (same as original)
+        quotes = [
+            cr.content if cr.content != "None" and
+            not cr.content.startswith("None\n") and
+            not cr.content.startswith("None ")
+            else ""
+            for cr in completion_results
+        ]
 
-    def step_create_new_section(
+        per_paper_summaries = {
+            t[0]: quote
+            for t, quote in zip(tup_items.items(), quotes)
+            if len(quote) > 10
+        }
+        per_paper_summaries = dict(sorted(per_paper_summaries.items(), key=lambda x: x[0]))
+
+        logger.info(f"Extracted quotes from {len(per_paper_summaries)} papers")
+        return per_paper_summaries, completion_results
+
+    def step_clustering_edit(
         self,
-        section_title: str,
-        section_instruction: str,
-        full_report: TaskResult,
-        papers_data: Dict[int, Dict[str, Any]] = None,
-        paper_ids: List[int] = None,
-    ) -> Tuple[GeneratedSection, CompletionResult]:
+        edit_instruction: str,
+        current_report: TaskResult,
+        per_paper_summaries: Dict[str, str],
+    ) -> Tuple[Dict[str, Any], CompletionResult]:
         """
-        Create a brand new section to add to the report.
+        STEP 2: Plan edits (mirrors MultiStepQAPipeline.step_clustering)
+
+        Extended with edit context: current report and edit instruction.
 
         Args:
-            section_title: Title for the new section
-            section_instruction: Instruction for what to include
-            full_report: The full report for context
-            papers_data: Dict of corpus_id -> paper data
-            paper_ids: List of corpus_ids to use for this section
+            edit_instruction: The user's edit instruction
+            current_report: The current report being edited
+            per_paper_summaries: Quotes extracted from new papers
 
         Returns:
-            Tuple of (new section, CompletionResult)
+            Tuple of (edit_plan dict, completion_result)
         """
-        logger.info(f"Creating new section: {section_title}")
+        logger.info("Generating edit plan based on new quotes and current report")
 
-        # Format references
-        section_references = "None"
-        if paper_ids and papers_data:
-            refs = []
-            for pid in paper_ids:
-                if pid in papers_data:
-                    paper_info = papers_data[pid]
-                    refs.append(
-                        f"[{pid} | {paper_info.get('author_str', 'Unknown')} | "
-                        f"Citations: {paper_info.get('n_citations', 0)}]\n"
-                        f"{paper_info.get('content', '')}"
-                    )
-            section_references = "\n\n".join(refs)
+        # Format current report
+        current_report_str = self._format_report_for_clustering(current_report)
 
-        # Format full report
-        full_report_str = self._format_report_summary(full_report)
+        # Format quotes (same as original)
+        quotes = ""
+        for idx, (paper, quotes_str) in enumerate(per_paper_summaries.items()):
+            quotes_str = quotes_str.replace("\n", "")
+            quotes += f"[{idx}]\t{quotes_str}" + "\n"
 
-        # Create the prompt
-        prompt = PROMPT_CREATE_NEW_SECTION.format(
-            full_report=full_report_str,
-            section_title=section_title,
-            section_instruction=section_instruction,
-            section_references=section_references,
+        # Create user prompt with edit context
+        user_prompt = USER_PROMPT_QUOTE_LIST_FORMAT_EDIT.format(
+            edit_instruction=edit_instruction,
+            current_report=current_report_str,
+            quotes=quotes
+        )
+
+        # Create system prompt with edit context
+        sys_prompt = SYSTEM_PROMPT_QUOTE_CLUSTER_EDIT.format(
+            current_report=current_report_str,
+            edit_instruction=edit_instruction,
+            quotes=quotes
         )
 
         try:
             response = llm_completion(
-                user_prompt=prompt,
+                user_prompt=user_prompt,
+                system_prompt=sys_prompt,
+                fallback=self.fallback_llm,
+                model=self.llm_model,
+                response_format=EditClusterPlan,
+                **self.llm_kwargs
+            )
+
+            parsed_result = json.loads(response.content)
+            logger.info(f"Edit plan generated with {len(parsed_result['dimensions'])} dimensions")
+            return parsed_result, response
+
+        except Exception as e:
+            logger.warning(f"Error while generating edit plan with {self.llm_model}: {e}")
+            raise e
+
+    def generate_iterative_summary_edit(
+        self,
+        edit_instruction: str,
+        current_report: TaskResult,
+        per_paper_summaries_extd: Dict[str, Dict[str, Any]],
+        plan: Dict[str, Any],
+    ) -> Generator[CompletionResult, None, None]:
+        """
+        STEP 3: Generate/edit sections (mirrors MultiStepQAPipeline.generate_iterative_summary)
+
+        Extended with edit context: current sections and edit actions.
+
+        Args:
+            edit_instruction: The user's edit instruction
+            current_report: The current report being edited
+            per_paper_summaries_extd: Extended quotes with inline citations
+            plan: Edit plan from step_clustering_edit
+
+        Yields:
+            CompletionResult for each section
+        """
+        logger.info("Executing edit plan section by section")
+
+        # Build map from index to quotes (same as original)
+        per_paper_summaries_tuples = [
+            (ref_string, response)
+            for ref_string, response in per_paper_summaries_extd.items()
+        ]
+
+        # Build map from section name to current section content
+        current_sections_map = {
+            section.title: section
+            for section in current_report.sections
+        }
+
+        # Extract plan structure (same format as original but with actions)
+        plan_dimensions = plan  # This is the dimensions list with actions
+        plan_str = "\n".join([
+            f"{dim['name']} ({dim['format']})"
+            for dim in plan_dimensions
+        ])
+
+        existing_sections = []
+
+        for idx, dim in enumerate(plan_dimensions):
+            section_name = dim["name"]
+            section_format = dim["format"]
+            quote_indices = dim.get("quotes", [])
+            action = dim.get("action", "NEW")
+
+            # Get current section content if it exists
+            current_section = current_sections_map.get(section_name)
+            current_section_content = ""
+            if current_section:
+                current_section_content = f"Title: {current_section.title}\n\n"
+                if current_section.tldr:
+                    current_section_content += f"TLDR: {current_section.tldr}\n\n"
+                current_section_content += current_section.text
+
+            # Skip deleted sections
+            if action == "DELETE":
+                logger.info(f"Skipping deleted section: {section_name}")
+                continue
+
+            # For KEEP action, return current content as-is
+            if action == "KEEP" and current_section:
+                logger.info(f"Keeping section unchanged: {section_name}")
+                # Create a dummy completion result with existing content
+                class KeepResult:
+                    content = current_section.text
+                yield KeepResult()
+                existing_sections.append(current_section.text)
+                continue
+
+            # Build quotes for this section (same as original)
+            quotes = ""
+            for ind in quote_indices:
+                if ind < len(per_paper_summaries_tuples):
+                    quotes += (
+                        per_paper_summaries_tuples[ind][0] + ": " +
+                        str(per_paper_summaries_tuples[ind][1]) + "\n"
+                    )
+                else:
+                    logger.warning(f"Quote index {ind} out of bounds")
+
+            # Format already written sections (same as original)
+            already_written = "\n\n".join(existing_sections)
+            already_written = re.sub(r"\[.*?\]", "", already_written)
+
+            # Prepare prompt arguments with edit context
+            fill_in_prompt_args = {
+                "edit_instruction": edit_instruction,
+                "plan": plan_str,
+                "already_written": already_written,
+                "section_name": f"{section_name} ({section_format})",
+                "current_section_content": current_section_content,
+                "action": action,
+            }
+
+            # Choose prompt based on whether we have quotes
+            if quotes:
+                fill_in_prompt_args["section_references"] = quotes
+                filled_in_prompt = PROMPT_ASSEMBLE_SUMMARY_EDIT.format(**fill_in_prompt_args)
+            else:
+                logger.warning(f"No quotes for section {section_name}, using no-quotes prompt")
+                filled_in_prompt = PROMPT_ASSEMBLE_NO_QUOTES_SUMMARY_EDIT.format(**fill_in_prompt_args)
+
+            # Generate section (same as original)
+            response = llm_completion(
+                user_prompt=filled_in_prompt,
                 model=self.llm_model,
                 fallback=self.fallback_llm,
                 **self.llm_kwargs
             )
 
-            # Create new section
-            new_section = GeneratedSection(
-                title=section_title,
-                tldr="",  # Will be generated in post-processing
-                text=response.content,
-                citations=[],  # Will be populated in post-processing
-                table=None,
-            )
+            existing_sections.append(response.content)
+            yield response
 
-            logger.info(f"Successfully created new section: {section_title}")
-            return new_section, response
-
-        except Exception as e:
-            logger.error(f"Error in step_create_new_section: {e}")
-            raise
-
+    # ========================================================================
     # Helper methods for formatting
+    # ========================================================================
+
+    def _format_sections_for_quote_extraction(self, sections: List[GeneratedSection]) -> str:
+        """Format section titles and summaries for quote extraction prompt."""
+        lines = []
+        for i, section in enumerate(sections):
+            lines.append(f"{i+1}. {section.title}")
+            if section.tldr:
+                lines.append(f"   {section.tldr}")
+        return "\n".join(lines)
 
     def _format_report_summary(self, report: TaskResult) -> str:
-        """Format a report for inclusion in prompts."""
+        """Format report summary for prompts."""
+        lines = []
+        if report.report_title:
+            lines.append(f"Title: {report.report_title}\n")
+
+        for i, section in enumerate(report.sections):
+            lines.append(f"Section {i+1}: {section.title}")
+            if section.tldr:
+                lines.append(f"  {section.tldr}")
+
+        return "\n".join(lines)
+
+    def _format_report_for_clustering(self, report: TaskResult) -> str:
+        """Format full report for clustering/planning prompt."""
         lines = []
         if report.report_title:
             lines.append(f"Title: {report.report_title}\n")
 
         lines.append("Sections:")
         for i, section in enumerate(report.sections):
-            lines.append(f"\n{i+1}. {section.title}")
+            lines.append(f"\n{i+1}. {section.title} ({'synthesis' if section.table is None else 'list'})")
             if section.tldr:
-                lines.append(f"   Summary: {section.tldr}")
-            # Include first 200 chars of text
-            text_preview = section.text[:200] + "..." if len(section.text) > 200 else section.text
-            lines.append(f"   Preview: {text_preview}")
-            lines.append(f"   Citations: {len(section.citations)} papers")
-
-        return "\n".join(lines)
-
-    def _format_sections_summary(self, sections: List[GeneratedSection]) -> str:
-        """Format sections for the edit plan prompt."""
-        lines = []
-        for i, section in enumerate(sections):
-            lines.append(f"\n[Section {i}]")
-            lines.append(f"Title: {section.title}")
-            if section.tldr:
-                lines.append(f"Summary: {section.tldr}")
-            lines.append(f"Citations: {len(section.citations)} papers")
-            # Include corpus IDs
-            if section.citations:
-                corpus_ids = [str(cit.paper.corpus_id) for cit in section.citations[:5]]
-                lines.append(f"Sample papers: {', '.join(corpus_ids)}")
-
-        return "\n".join(lines)
-
-    def _format_available_papers(self, papers: Dict[int, Any]) -> str:
-        """Format available papers for the edit plan prompt."""
-        lines = []
-        for corpus_id, paper_info in papers.items():
-            if isinstance(paper_info, dict):
-                title = paper_info.get('title', 'Unknown')
-                author = paper_info.get('author_str', 'Unknown')
-                lines.append(f"[{corpus_id}] {author} - {title}")
-            else:
-                lines.append(f"[{corpus_id}] {paper_info}")
-
-        return "\n".join(lines)
-
-    def _format_section_references(
-        self,
-        section: GeneratedSection,
-        new_paper_ids: List[int],
-        papers_data: Dict[int, Dict[str, Any]],
-    ) -> str:
-        """Format references for a section edit."""
-        refs = []
-
-        # Include existing citations
-        for cit in section.citations:
-            paper = cit.paper
-            snippets = "\n".join(cit.snippets) if cit.snippets else ""
-            refs.append(
-                f"[{paper.corpus_id} | {', '.join(a.name for a in paper.authors[:2])}, "
-                f"{paper.year} | Citations: {paper.n_citations}]\n"
-                f"Title: {paper.title}\n"
-                f"Snippets: {snippets}"
-            )
-
-        # Include new papers if provided
-        if new_paper_ids and papers_data:
-            for pid in new_paper_ids:
-                if pid in papers_data:
-                    paper_info = papers_data[pid]
-                    refs.append(
-                        f"[{pid} | {paper_info.get('author_str', 'Unknown')} | "
-                        f"Citations: {paper_info.get('n_citations', 0)}]\n"
-                        f"Content: {paper_info.get('content', '')}"
-                    )
-
-        return "\n\n".join(refs) if refs else "No references available"
-
-    def _format_report_context(
-        self,
-        report: TaskResult,
-        exclude_section_index: int = None,
-    ) -> str:
-        """Format the full report context, optionally excluding one section."""
-        lines = []
-        if report.report_title:
-            lines.append(f"Report Title: {report.report_title}\n")
-
-        lines.append("Other sections in the report:")
-        for i, section in enumerate(report.sections):
-            if i == exclude_section_index:
-                continue
-            lines.append(f"\n{section.title}")
-            if section.tldr:
-                lines.append(f"{section.tldr}")
+                lines.append(f"   TLDR: {section.tldr}")
+            # Include snippet of text
+            text_preview = section.text[:300] + "..." if len(section.text) > 300 else section.text
+            lines.append(f"   Content preview: {text_preview}")
+            lines.append(f"   Papers cited: {len(section.citations)}")
 
         return "\n".join(lines)
