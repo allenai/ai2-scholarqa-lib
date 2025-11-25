@@ -18,6 +18,7 @@ from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, Citation
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.preprocess.query_preprocessor import validate, decompose_query, LLMProcessedQuery
 from scholarqa.rag.multi_step_qa_pipeline import MultiStepQAPipeline
+from scholarqa.rag.edit_pipeline import EditPipeline
 from scholarqa.rag.retrieval import PaperFinder
 from scholarqa.state_mgmt.local_state_mgr import AbsStateMgrClient, LocalStateMgrClient
 from scholarqa.trace.event_traces import EventTrace
@@ -76,6 +77,9 @@ class ScholarQA:
         self.table_llm = kwargs.get("table_llm", self.llm_model)
         self.table_generator = TableGenerator(paper_finder=paper_finder, llm_caller=self.llm_caller)
         self.run_table_generation = run_table_generation
+
+        # Initialize edit pipeline
+        self.edit_pipeline = EditPipeline(self.llm_model, fallback_llm=fallback_llm, **self.llm_kwargs)
 
     def update_task_state(
             self,
@@ -609,3 +613,422 @@ class ScholarQA:
         event_trace.trace_summary_event(json_summary, all_sections, tcosts)
         event_trace.persist_trace(self.logs_config)
         return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+
+    @traceable(run_type="tool", name="ai2_scholar_qa_edit_trace")
+    def run_edit_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+        """
+        Edit an existing report based on user instructions.
+
+        This function MIRRORS run_qa_pipeline with edit-specific extensions:
+        0) Retrieve current report from thread_id
+        1) Conditional search + rerank (includes mentioned_papers)
+        2) Quote extraction from new papers (WITH EDIT CONTEXT)
+        3) Edit planning/clustering (WITH CURRENT REPORT)
+        4) Section generation/editing (WITH CURRENT SECTIONS + ACTIONS)
+
+        :param req: Tool request with edit_existing=True, thread_id, edit_instruction, mentioned_papers
+        :param inline_tags: Whether to include inline <paper> tags in the output
+        :return: Updated TaskResult
+        """
+        self.tool_request = req
+        self.update_task_state("Processing edit request", task_estimated_time="~3 minutes", step_estimated_time=5)
+
+        # Validate edit request
+        if not req.edit_instruction:
+            raise ValueError("edit_instruction is required for edit workflow")
+        if not req.thread_id:
+            raise ValueError("thread_id is required to fetch the current report")
+
+        task_id = self.task_id if self.task_id else req.task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
+        edit_instruction = req.edit_instruction
+
+        logger.info(
+            f"Received edit request for thread {req.thread_id}: {edit_instruction} "
+            f"from user_id: {user_id}"
+        )
+
+        # ====================================================================
+        # STEP 0: Retrieve current report (EDIT-SPECIFIC)
+        # ====================================================================
+        self.update_task_state("Retrieving current report", step_estimated_time=2)
+        current_report = self._retrieve_report_from_thread(req.thread_id)
+        if not current_report:
+            raise ValueError(f"No report found for thread_id: {req.thread_id}")
+
+        logger.info(
+            f"Retrieved report with {len(current_report.sections)} sections: "
+            f"{current_report.report_title}"
+        )
+
+        # Keep original report title
+        self.report_title = current_report.report_title
+
+        # Initialize event trace
+        event_trace = EventTrace(
+            task_id,
+            self.paper_finder.retriever.n_retrieval if hasattr(self.paper_finder.retriever, "n_retrieval") else 0,
+            self.paper_finder.n_rerank,
+            req,
+            user_id=user_id
+        )
+
+        cost_args = CostReportingArgs(
+            task_id=task_id,
+            user_id=user_id,
+            description="Edit workflow",
+            model=self.llm_model,
+            msg_id=msg_id
+        )
+
+        # ====================================================================
+        # STEP 1: Search and Rerank (CONDITIONAL, mirrors find_relevant_papers + rerank)
+        # ====================================================================
+
+        # Decide what papers we need:
+        # 1. mentioned_papers (user-provided corpus_ids)
+        # 2. Optionally search for new papers based on edit instruction
+
+        retrieved_candidates = []
+        paper_metadata = {}
+
+        # TODO: mentioned_papers usage - IMPORTANT MARKER #1
+        # Handle user-mentioned papers (corpus_ids provided in req.mentioned_papers)
+        # Currently we fetch their metadata using get_paper_metadata()
+        # IDEALLY we would:
+        #   - Fetch full paper text or specific snippets from these papers
+        #   - Get the same rich content that comes from search (passages, sections, etc.)
+        # BUT we currently only have access to abstracts and basic metadata
+        if req.mentioned_papers:
+            self.update_task_state(
+                f"Fetching {len(req.mentioned_papers)} user-mentioned papers",
+                step_estimated_time=5
+            )
+            logger.info(f"Fetching metadata for mentioned papers: {req.mentioned_papers}")
+
+            # Fetch metadata for mentioned papers
+            mentioned_metadata = get_paper_metadata(req.mentioned_papers)
+
+            # TODO: mentioned_papers usage - IMPORTANT MARKER #2
+            # Convert mentioned papers to the same format as search results
+            # Currently using abstracts, but IDEALLY would use:
+            #   - Full text passages (like semantic search returns)
+            #   - Section-level content
+            #   - Snippet-level granularity
+            for corpus_id in req.mentioned_papers:
+                corpus_id_str = str(corpus_id)
+                if corpus_id_str in mentioned_metadata:
+                    mdata = mentioned_metadata[corpus_id_str]
+                    # Create a candidate in the same format as search results
+                    candidate = {
+                        "corpus_id": corpus_id,
+                        "title": mdata.get("title", ""),
+                        "abstract": mdata.get("abstract", ""),
+                        "year": mdata.get("year"),
+                        "venue": mdata.get("venue"),
+                        "authors": mdata.get("authors", []),
+                        "citationCount": mdata.get("citationCount", 0),
+                        "s2FieldsOfStudy": mdata.get("s2FieldsOfStudy", []),
+                        # NOTE: We use abstract as content since we don't have snippets
+                        # TODO: mentioned_papers usage - IMPORTANT MARKER #3
+                        # IDEALLY we would fetch actual paper snippets here
+                        "text": mdata.get("abstract", ""),
+                        "score": 1.0,  # High score since user explicitly mentioned
+                    }
+                    retrieved_candidates.append(candidate)
+                    paper_metadata[corpus_id_str] = mdata
+
+        # Optionally search for additional papers based on edit instruction
+        # This mimics the "Add papers about X" use case
+        if req.query or edit_instruction:
+            # For simple edits like "Add this paper", we don't need search
+            # For "Add papers about X topic", we need search
+            # Use heuristic: if no mentioned_papers OR instruction mentions "about"/"on"/"papers"
+            needs_search = not req.mentioned_papers or any(
+                word in edit_instruction.lower()
+                for word in ["about", " on ", "papers about", "more papers", "add papers", "papers on"]
+            )
+
+            if needs_search:
+                self.update_task_state("Searching for additional papers", step_estimated_time=20)
+
+                # Use edit instruction as query (mirrors preprocess_query)
+                # For now, skip query decomposition and use instruction directly
+                # Could optionally call preprocess_query here
+                search_query = edit_instruction
+
+                # Find relevant papers (mirrors find_relevant_papers)
+                snippet_srch_res, s2_srch_res = self.find_relevant_papers(
+                    LLMProcessedQuery(
+                        rewritten_query=search_query,
+                        keyword_query=search_query,
+                        search_filters={}
+                    )
+                )
+                retrieved_candidates.extend(snippet_srch_res + s2_srch_res)
+
+        if not retrieved_candidates:
+            # No new papers to add - user might be asking to modify existing content
+            logger.info("No new papers to add, will work with existing report content")
+            # Create empty dataframe for quote extraction to skip
+            reranked_df = pd.DataFrame()
+        else:
+            # Rerank and aggregate (mirrors rerank_and_aggregate)
+            event_trace.trace_retrieval_event(retrieved_candidates)
+
+            s2_srch_metadata = [
+                {k: v for k, v in paper.items() if
+                 k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS}
+                for paper in retrieved_candidates if "s2FieldsOfStudy" in paper
+            ]
+
+            reranked_df, paper_metadata_new = self.rerank_and_aggregate(
+                edit_instruction,
+                retrieved_candidates,
+                {str(paper["corpus_id"]): paper for paper in s2_srch_metadata}
+            )
+
+            # Merge with mentioned_papers metadata
+            paper_metadata.update(paper_metadata_new)
+
+            if reranked_df.empty:
+                logger.warning("Reranking produced no results")
+
+            event_trace.trace_rerank_event(reranked_df.to_dict(orient="records") if not reranked_df.empty else [])
+
+        # ====================================================================
+        # STEP 2: Quote Extraction (mirrors step_select_quotes)
+        # EDIT-SPECIFIC: Pass current report and edit instruction to prompts
+        # ====================================================================
+
+        per_paper_summaries = {}
+
+        if not reranked_df.empty:
+            self.update_task_state("Extracting quotes from new papers", step_estimated_time=15)
+            logger.info(
+                f"{reranked_df.shape[0]} papers to extract quotes from for edit task"
+            )
+
+            # Use EDIT-SPECIFIC quote extraction with current report context
+            per_paper_summaries, completion_results = self.edit_pipeline.step_select_quotes_edit(
+                edit_instruction=edit_instruction,
+                current_report=current_report,
+                scored_df=reranked_df,
+            )
+
+            if not per_paper_summaries:
+                logger.warning("No quotes extracted from new papers")
+            else:
+                logger.info(f"Extracted quotes from {len(per_paper_summaries)} papers")
+
+                # Trace quote extraction
+                class QuoteResult:
+                    def __init__(self, quotes):
+                        self.result = quotes
+                        self.tot_cost = 0
+                event_trace.trace_quote_event(QuoteResult(per_paper_summaries))
+
+        # ====================================================================
+        # STEP 3: Clustering/Planning (mirrors step_clustering)
+        # EDIT-SPECIFIC: Pass current report to generate edit plan with actions
+        # ====================================================================
+
+        self.update_task_state("Generating edit plan", step_estimated_time=15)
+
+        if not per_paper_summaries:
+            # No new quotes - create a minimal plan that keeps all sections
+            # User might be asking to reorganize or modify existing content
+            logger.info("No new quotes, creating KEEP-only plan")
+            cluster_json_result = {
+                "cot": "No new papers to add. Keeping existing sections unchanged.",
+                "report_title": current_report.report_title,
+                "dimensions": [
+                    {
+                        "name": section.title,
+                        "format": "list" if section.table else "synthesis",
+                        "quotes": [],
+                        "action": "KEEP"
+                    }
+                    for section in current_report.sections
+                ]
+            }
+        else:
+            # Use EDIT-SPECIFIC clustering with current report context
+            cluster_json_result, cluster_response = self.edit_pipeline.step_clustering_edit(
+                edit_instruction=edit_instruction,
+                current_report=current_report,
+                per_paper_summaries=per_paper_summaries,
+            )
+
+            # Trace clustering
+            class ClusterResult:
+                def __init__(self, result):
+                    self.result = result
+                    self.tot_cost = 0
+            event_trace.trace_clustering_event(ClusterResult(cluster_json_result), {})
+
+        # Update report title if changed
+        if cluster_json_result.get("report_title"):
+            self.report_title = cluster_json_result["report_title"]
+
+        # Format plan for section generation (same as original)
+        plan_dimensions = cluster_json_result["dimensions"]
+        plan_json = {
+            f'{dim["name"]} ({dim["format"]})': dim.get("quotes", [])
+            for dim in plan_dimensions
+        }
+
+        # ====================================================================
+        # STEP 4: Quote Citation Mapping (mirrors extract_quote_citations)
+        # Same as original - maps quotes to inline citations
+        # ====================================================================
+
+        per_paper_summaries_extd = {}
+        quotes_metadata = {}
+
+        if per_paper_summaries and not reranked_df.empty:
+            per_paper_summaries_extd, quotes_metadata = self.extract_quote_citations(
+                reranked_df,
+                per_paper_summaries,
+                plan_json,
+                paper_metadata
+            )
+            event_trace.trace_inline_citation_following_event(per_paper_summaries_extd, quotes_metadata)
+        else:
+            # No new quotes, use empty dict
+            per_paper_summaries_extd = {}
+
+        # ====================================================================
+        # STEP 5: Section Generation/Editing (mirrors step_gen_iterative_summary)
+        # EDIT-SPECIFIC: Pass current report and use edit actions (KEEP, EXPAND, etc.)
+        # ====================================================================
+
+        section_titles = [dim["name"] for dim in plan_dimensions]
+        self.update_task_state(
+            f"Editing report sections",
+            step_estimated_time=15 * len(section_titles)
+        )
+
+        # Use EDIT-SPECIFIC section generation with current report and actions
+        gen_sections_iter = self.edit_pipeline.generate_iterative_summary_edit(
+            edit_instruction=edit_instruction,
+            current_report=current_report,
+            per_paper_summaries_extd=per_paper_summaries_extd,
+            plan=plan_dimensions,  # Pass full dimensions with actions
+        )
+
+        json_summary, generated_sections, table_threads = [], [], []
+        tables = [None for _ in plan_dimensions]
+        citation_ids = dict()
+
+        try:
+            gen_iter = gen_sections_iter
+            idx = 0
+            while True:
+                dim = plan_dimensions[idx]
+                action = dim.get("action", "NEW")
+
+                # Skip deleted sections
+                if action == "DELETE":
+                    idx += 1
+                    continue
+
+                if idx < len(plan_dimensions):
+                    self.update_task_state(
+                        f"Editing section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
+                        curr_response=generated_sections,
+                        step_estimated_time=15
+                    )
+
+                section_text = next(gen_iter)
+                section_json = get_json_summary(
+                    self.multi_step_pipeline.llm_model,
+                    [section_text],
+                    per_paper_summaries_extd,
+                    paper_metadata,
+                    citation_ids,
+                    inline_tags
+                )[0]
+                section_json["format"] = dim["format"]
+
+                json_summary.append(section_json)
+                self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
+
+                # Generate tables for list sections (same as original)
+                if section_json["format"] == "list" and section_json["citations"] and self.run_table_generation:
+                    dim["idx"] = idx
+                    cit_ids = [int(c["paper"]["corpus_id"]) for c in section_json["citations"]]
+                    tthread = self.gen_table_thread(user_id, edit_instruction, dim, cit_ids, tables)
+                    if tthread:
+                        table_threads.append(tthread)
+
+                gen_sec = self.get_gen_sections_from_json(section_json)
+                generated_sections.append(gen_sec)
+                idx += 1
+
+        except StopIteration as e:
+            all_sections = e.value
+
+        # ====================================================================
+        # STEP 6: Table Generation (same as original)
+        # ====================================================================
+
+        self.update_task_state("Generating comparison tables", curr_response=generated_sections, step_estimated_time=20)
+
+        start = time()
+        for tthread in table_threads:
+            tthread.join()
+        logger.info(f"Table generation wait time: {time() - start:.2f}")
+
+        tcosts = []
+        for sidx in range(len(json_summary)):
+            tables_val = None
+            if sidx < len(tables) and tables[sidx]:
+                if type(tables[sidx]) == tuple:
+                    tables_val, tcost = tables[sidx]
+                    tcosts.append(tcost)
+                else:
+                    tables_val = tables[sidx]
+            json_summary[sidx]["table"] = tables_val.to_dict() if tables_val else None
+            generated_sections[sidx].table = tables_val if tables_val else None
+
+        self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
+
+        # ====================================================================
+        # Finalize and return (same as original)
+        # ====================================================================
+
+        event_trace.trace_summary_event(json_summary, all_sections if 'all_sections' in locals() else None, tcosts)
+        event_trace.persist_trace(self.logs_config)
+
+        return TaskResult(
+            report_title=self.report_title,
+            sections=generated_sections,
+            cost=event_trace.total_cost,
+            tokens=event_trace.tokens
+        )
+    def _retrieve_report_from_thread(self, thread_id: str) -> TaskResult:
+        """
+        Retrieve the current report from the state manager using thread_id.
+
+        Args:
+            thread_id: The thread ID containing the report
+
+        Returns:
+            TaskResult object or None if not found
+        """
+        try:
+            # The thread_id is used as task_id in the state manager
+            state = self.state_mgr.read_state(thread_id)
+            if state and state.task_result:
+                # If task_result is already a TaskResult object, return it
+                if isinstance(state.task_result, TaskResult):
+                    return state.task_result
+                # Otherwise, convert from dict
+                elif isinstance(state.task_result, dict):
+                    return TaskResult(**state.task_result)
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving report for thread {thread_id}: {e}")
+            return None
