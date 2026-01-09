@@ -287,7 +287,7 @@ class ScholarQA:
                                     # check if the sentence offset is within the range of the quote
                                     # the sentence can be completely or partially inside the quote
                                     if (lookup_idx < soff["end"] <= lookup_end) or (
-                                            lookup_idx <= soff["start"] < lookup_end)\
+                                            lookup_idx <= soff["start"] < lookup_end) \
                                             or (soff["start"] <= lookup_idx and lookup_end <= soff["end"]):
                                         curr_quote_map["sentence_offsets"].append(soff)
                             if sentence.get("ref_mentions"):
@@ -309,7 +309,9 @@ class ScholarQA:
                     if "section_title" not in curr_quote_map:
                         curr_quote_map["pdf_hash"] = ""
                         for field in ["title", "abstract"]:
-                            if row[field] and new_quote.lower() in row[field].lower():
+                            if row[field] and (
+                                    new_quote.lower() in row[field].lower() or quote_reg in re.sub(r'[^a-zA-Z]', '',
+                                                                                                   row[field]).lower()):
                                 curr_quote_map["section_title"] = field
                     mapped_quotes.append(curr_quote_map)
                 quotes_metadata[ref_str] = mapped_quotes
@@ -433,7 +435,7 @@ class ScholarQA:
                 value_model=payload["value_model"],
             )
             tlist[dim["idx"]] = (table, costs)
-            
+
         task_id = self.task_id if self.task_id else self.tool_request.task_id
         payload = {
             "task_id": task_id,
@@ -608,4 +610,5 @@ class ScholarQA:
         self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
         event_trace.trace_summary_event(json_summary, all_sections, tcosts)
         event_trace.persist_trace(self.logs_config)
-        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost,
+                          tokens=event_trace.tokens)

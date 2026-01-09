@@ -51,6 +51,7 @@ dev = [
     "black",
     "mypy",
     "wheel",
+    "pytest",
 ]
 all = [
     "torch==2.3.1",
