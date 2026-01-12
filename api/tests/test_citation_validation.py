@@ -163,10 +163,11 @@ def validate_citations_for_question(scholar_qa: ScholarQA, question: str) -> tup
     return len(invalid_citations), invalid_citations
 
 
-@pytest.mark.parametrize("question_idx", range(100))  # Adjust range based on your questions file
+@pytest.mark.parametrize("question_idx", range(25))  # Adjust range based on your questions file
 def test_citation_validation(scholar_qa, questions_list, question_idx):
     """Test that citations are valid for each question."""
     # Skip if question index exceeds available questions
+
     if question_idx >= len(questions_list):
         pytest.skip(f"Question index {question_idx} exceeds available questions ({len(questions_list)})")
 

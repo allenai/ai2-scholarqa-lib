@@ -285,7 +285,7 @@ class ScholarQA:
                             quote_words = quote.lower().strip().split()
                             sentence_words = sentence["text"].lower().split()
                             matching_subsequence, overlap_ratio = ScholarQA._word_overlap_match(
-                                quote_words, sentence_words, threshold=0.8
+                                quote_words, sentence_words, threshold=0.75
                             )
                             if matching_subsequence:
                                 # Find the subsequence in the sentence text to get character index
@@ -342,7 +342,7 @@ class ScholarQA:
         return quotes_metadata
 
     @staticmethod
-    def _word_overlap_match(quote_words: List[str], sentence_words: List[str], threshold: float = 0.8) -> Tuple[str, float]:
+    def _word_overlap_match(quote_words: List[str], sentence_words: List[str], threshold: float = 0.75) -> Tuple[str, float]:
         """
         Find word overlap using SequenceMatcher matching blocks.
         
@@ -356,11 +356,16 @@ class ScholarQA:
         """
         if not quote_words or not sentence_words:
             return "", 0.0
-        quote_words_set = set(quote_words)
-        if len(quote_words_set.intersection(set(sentence_words))) / len(quote_words_set) < threshold - 0.2:
+        
+        # Strip punctuation from sentence words for better matching
+        sentence_words_clean = [re.sub(r'[^\w]', '', word) for word in sentence_words]
+        
+        quote_words_clean = [re.sub(r'[^\w]', '', word) for word in quote_words]
+        quote_words_set = set(quote_words_clean)
+        if len(quote_words_set.intersection(set(sentence_words_clean))) / len(quote_words_set) < 0.5:
             return "", 0.0
         
-        matcher = SequenceMatcher(None, quote_words, sentence_words)
+        matcher = SequenceMatcher(None, quote_words_clean, sentence_words_clean)
         matching_blocks = matcher.get_matching_blocks()
         
         # Calculate total matching words from all blocks (excluding the final dummy block)
