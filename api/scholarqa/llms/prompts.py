@@ -21,7 +21,25 @@ Sometimes you will see authors and/or section titles. Do not use them in your an
 
 Output the quote ONLY. Do not introduce it with any text, formatting, or white spaces.
 
-If the paper does not answer the user query at all, just output None
+If the paper does not answer the user query at all, just output None.
+
+The output MUST either be the exact extracted quote or the word None. 
+DO NOT output the reasoning behind your decision or any opinions other than what is present in the provided text.
+The output should be in json format as per following examples:
+<examples>
+Example 1 (Irrelevant paper): 
+Input:  As one of the typical problems, this is to decide whether a given sample has a solution and find one if it has.
+Output: 
+```json
+{"quote": "None"}
+```
+Example 2 (Relevant paper):
+Input:  As one of the typical problems, this is to decide whether a given sample has a solution and find one if it has.
+Output: 
+```json
+{"quote": "decide whether a given sample has a solution."}
+```
+</examples>
 """
 
 USER_PROMPT_PAPER_LIST_FORMAT = """

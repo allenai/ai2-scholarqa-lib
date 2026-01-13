@@ -45,6 +45,9 @@ class CitationSrc(BaseModel):
         "A list of all the relevant snippets from the cited paper"
     ))
     score: float = Field(description=("Relevance score of the snippet for the query"))
+    snippet_metadata: Optional[List[Dict[str, Any]]] = Field(default=None, description=(
+        "Metadata for each snippet such as section name"
+    ))
 
 
 class GeneratedSection(BaseModel):

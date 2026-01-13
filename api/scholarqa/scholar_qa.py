@@ -9,6 +9,7 @@ from uuid import uuid4
 import pandas as pd
 from anyascii import anyascii
 from langsmith import traceable
+from difflib import SequenceMatcher
 
 from scholarqa.config.config_setup import LogsConfig
 from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT
@@ -271,11 +272,25 @@ class ScholarQA:
 
                     shift = 0  # keep track of changes to the quote offsets when the inline citations are modified
                     for sidx, sentence in enumerate(sentences):
-                        # can lookup exact string now since we prompt the llm to include the citations in the quotes
+                        # Method 1: Exact string matching (high precision)
                         lookup_idx = sentence["text"].lower().find(quote.lower().strip())
                         raw_match = lookup_idx >= 0
+
+                        # Method 2: Alphabet-only matching (high recall)
                         if not raw_match:
                             lookup_idx = sent_alpha[sidx].find(quote_reg)
+                        
+                        # Method 3: Word-level overlap matching for approximate matches
+                        if lookup_idx < 0 and len(quote.strip()) > 20:  # Only for longer quotes to avoid false positives
+                            quote_words = quote.lower().strip().split()
+                            sentence_words = sentence["text"].lower().split()
+                            matching_subsequence, overlap_ratio = ScholarQA._word_overlap_match(
+                                quote_words, sentence_words, threshold=0.75
+                            )
+                            if matching_subsequence:
+                                # Find the subsequence in the sentence text to get character index
+                                lookup_idx = sentence["text"].lower().find(matching_subsequence)
+                                
                         if lookup_idx >= 0:
                             lookup_end = lookup_idx + len(quote)
                             curr_quote_map["section_title"] = sentence["section_title"]
@@ -287,7 +302,7 @@ class ScholarQA:
                                     # check if the sentence offset is within the range of the quote
                                     # the sentence can be completely or partially inside the quote
                                     if (lookup_idx < soff["end"] <= lookup_end) or (
-                                            lookup_idx <= soff["start"] < lookup_end)\
+                                            lookup_idx <= soff["start"] < lookup_end) \
                                             or (soff["start"] <= lookup_idx and lookup_end <= soff["end"]):
                                         curr_quote_map["sentence_offsets"].append(soff)
                             if sentence.get("ref_mentions"):
@@ -309,7 +324,10 @@ class ScholarQA:
                     if "section_title" not in curr_quote_map:
                         curr_quote_map["pdf_hash"] = ""
                         for field in ["title", "abstract"]:
-                            if row[field] and new_quote.lower() in row[field].lower():
+                            if row[field] and (
+                                    new_quote.lower() in row[field].lower() or quote_reg in re.sub(r'[^a-zA-Z]', '',
+                                                                                                   row[field]).lower())\
+                                    or ScholarQA._word_overlap_match(new_quote.lower().split(), row[field].lower().split())[0]:
                                 curr_quote_map["section_title"] = field
                     mapped_quotes.append(curr_quote_map)
                 quotes_metadata[ref_str] = mapped_quotes
@@ -322,6 +340,53 @@ class ScholarQA:
                 per_paper_summaries[ref_str] = updated_quotes
 
         return quotes_metadata
+
+    @staticmethod
+    def _word_overlap_match(quote_words: List[str], sentence_words: List[str], threshold: float = 0.75) -> Tuple[str, float]:
+        """
+        Find word overlap using SequenceMatcher matching blocks.
+        
+        Args:
+            quote_words: List of words from the quote (should be normalized/lowercased)
+            sentence_words: List of words from the sentence (should be normalized/lowercased)
+            threshold: Minimum overlap ratio (matching words / quote length) to consider a match
+            
+        Returns:
+            Tuple of (first_matching_subsequence, overlap_ratio). Returns ("", 0.0) if insufficient overlap.
+        """
+        if not quote_words or not sentence_words:
+            return "", 0.0
+        
+        # Strip punctuation from sentence words for better matching
+        sentence_words_clean = [re.sub(r'[^\w]', '', word) for word in sentence_words]
+        
+        quote_words_clean = [re.sub(r'[^\w]', '', word) for word in quote_words]
+        quote_words_set = set(quote_words_clean)
+        if len(quote_words_set.intersection(set(sentence_words_clean))) / len(quote_words_set) < 0.5:
+            return "", 0.0
+        
+        matcher = SequenceMatcher(None, quote_words_clean, sentence_words_clean)
+        matching_blocks = matcher.get_matching_blocks()
+        
+        # Calculate total matching words from all blocks (excluding the final dummy block)
+        total_matching_words = sum(block.size for block in matching_blocks[:-1])
+        overlap_ratio = total_matching_words / len(quote_words)
+        
+        if overlap_ratio >= threshold and matching_blocks:
+            # Get the first matching block with size > 1 and convert to string
+            for block in matching_blocks:
+                if block.size > 1:
+                    first_block = matching_blocks[0]
+                    start_idx = first_block.b  # Start index in sentence
+                    block_size = first_block.size  # Length of matching block
+                    # Extract the matching subsequence from the sentence
+                    matching_subsequence = " ".join(sentence_words[start_idx:start_idx + block_size])
+                    return matching_subsequence, overlap_ratio
+            
+
+        
+        return "", overlap_ratio
+
 
     def filter_metadata(self, paper_metadata: Dict[str, Any]) -> bool:
         return True
@@ -433,7 +498,7 @@ class ScholarQA:
                 value_model=payload["value_model"],
             )
             tlist[dim["idx"]] = (table, costs)
-            
+
         task_id = self.task_id if self.task_id else self.tool_request.task_id
         payload = {
             "task_id": task_id,
@@ -608,4 +673,5 @@ class ScholarQA:
         self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
         event_trace.trace_summary_event(json_summary, all_sections, tcosts)
         event_trace.persist_trace(self.logs_config)
-        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost,
+                          tokens=event_trace.tokens)

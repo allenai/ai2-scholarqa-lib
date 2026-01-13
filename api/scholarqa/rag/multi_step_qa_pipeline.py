@@ -44,6 +44,10 @@ class ClusterPlan(BaseModel):
         "The list of dimensions along with the associated quote indices as per the cot plan"
     ))
 
+class QuoteOutput(BaseModel):
+    quote: str = Field(default=None, description=(
+        "The extracted quote from the paper"
+    ))
 
 class MultiStepQAPipeline:
     def __init__(self, llm_model: str, fallback_llm: str = GPT_4o, batch_workers: int = 20,
@@ -66,11 +70,12 @@ class MultiStepQAPipeline:
         messages = [USER_PROMPT_PAPER_LIST_FORMAT.format(query, v) for k, v in tup_items.items()]
         completion_results = batch_llm_completion(self.llm_model, messages=messages, system_prompt=sys_prompt,
                                                   max_workers=self.batch_workers, fallback=self.fallback_llm,
+                                                  response_format=QuoteOutput,
                                                   **self.llm_kwargs)
-        quotes = [
-            cr.content if cr.content != "None" and not cr.content.startswith("None\n") and not cr.content.startswith(
-                "None ")
-            else "" for cr in completion_results]
+        quotes = [json.loads(cr.content).get("quote", "") for cr in completion_results]
+        # filter out quotes that are "None" or start with "None\n" or "
+        quotes = [cr_content if cr_content != "None" and not cr_content.startswith("None\n") and not cr_content.startswith("None ")
+            else "" for cr_content in quotes ]
         per_paper_summaries = {t[0]: quote for t, quote in zip(tup_items.items(), quotes) if len(quote) > 10}
         per_paper_summaries = dict(sorted(per_paper_summaries.items(), key=lambda x: x[0]))
         return per_paper_summaries, completion_results
