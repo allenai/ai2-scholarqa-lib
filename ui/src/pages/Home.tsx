@@ -82,7 +82,7 @@ export const Home: React.FC<Props> = (props) => {
               <path fill="#ef529b" d="M682.23,30.33h14.44c2.81,0,4.88.64,6.22,1.92,1.34,1.28,2,2.95,2,5.03,0,1.93-.54,3.48-1.62,4.64-1.08,1.14-2.4,1.83-3.96,2.09,1.76.26,3.19.98,4.3,2.17,1.11,1.16,1.66,2.77,1.66,4.81,0,2.36-.77,4.23-2.3,5.62-1.5,1.36-3.71,2.04-6.6,2.04h-14.14v-28.33ZM695.86,55.12c1.65,0,2.85-.43,3.62-1.28.79-.88,1.19-2,1.19-3.37,0-3.24-1.86-4.86-5.58-4.86h-8.48v9.5h9.24ZM695.09,42.39c1.79,0,3.1-.35,3.92-1.06.85-.71,1.28-1.8,1.28-3.28s-.34-2.5-1.02-3.15c-.68-.68-1.89-1.02-3.62-1.02h-9.03v8.52h8.48Z"/>
             </svg>
             </Box>
-            <Typography variant="body2">Synthesizing 8M+ open access papers. A project from <Link href="https://allenai.org/" target="_blank" sx={{ color: 'rgba(15, 203, 140, 1)' }}>Ai2</Link> and <Link href="https://www.semanticscholar.org" target="_blank" sx={{ color: 'rgba(15, 203, 140, 1)' }}>Semantic Scholar</Link>. Ai2 Scholar QA can make mistakes. Check source documents by following citations.</Typography>
+            <Typography variant="body2">Synthesizing 12M+ open access papers. A project from <Link href="https://allenai.org/" target="_blank" sx={{ color: 'rgba(15, 203, 140, 1)' }}>Ai2</Link> and <Link href="https://www.semanticscholar.org" target="_blank" sx={{ color: 'rgba(15, 203, 140, 1)' }}>Semantic Scholar</Link>. Ai2 Scholar QA can make mistakes. Check source documents by following citations.</Typography>
           </Box>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

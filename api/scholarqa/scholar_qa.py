@@ -120,7 +120,7 @@ class ScholarQA:
         rewritten_query = llm_processed_query.rewritten_query
         keyword_query = llm_processed_query.keyword_query
         self.update_task_state(
-            f"Retrieving relevant passages from a corpus of 8M+ open access papers",
+            f"Retrieving relevant passages from a corpus of 12M+ open access papers",
             step_estimated_time=5
         )
         # Get relevant paper passages from the Semantic Scholar index for the llm rewritten query
