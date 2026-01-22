@@ -246,7 +246,6 @@ Rules for section formatting:
 </format and structure instructions>
 """
 
-# Unified generation prompt (one-shot approach)
 UNIFIED_GENERATION_PROMPT = """A user issued a query and a set of research papers were provided with salient content.
 The user query was: {query}
 
