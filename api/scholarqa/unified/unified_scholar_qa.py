@@ -1,5 +1,6 @@
 import logging
 
+from scholarqa.llms.litellm_helper import llm_completion
 from scholarqa.models import GeneratedReportData
 from scholarqa.scholar_qa import ScholarQA
 from scholarqa.unified.prompt_utils import format_df_as_references, build_prompt
@@ -20,9 +21,21 @@ class UnifiedScholarQA(ScholarQA):
         prompt = build_prompt(query, section_references)
 
         logger.info(f"Built unified generation prompt with {len(section_references)} references")
-        logger.info(f"Unified generation prompt:\n{prompt}")
 
-        # TODO: Replace with actual unified generation model call
+        # Call the model
+        model = self.multi_step_pipeline.llm_model
+        logger.info(f"Calling unified generation model: {model}")
+
+        completion_result = llm_completion(
+            user_prompt=prompt,
+            model=model,
+            **self.llm_kwargs
+        )
+
+        response = completion_result.content
+        logger.info(f"Unified generation response:\n{response}")
+
+        # TODO: Parse response into sections and return proper GeneratedReportData
         # For now, fall back to the parent's multi-step generation
         return super().generate_report(
             query, reranked_df, paper_metadata, cost_args,
