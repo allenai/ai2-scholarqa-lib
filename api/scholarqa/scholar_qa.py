@@ -630,7 +630,7 @@ class ScholarQA:
             report_title=self.report_title,
             sections=generated_sections,
             json_summary=json_summary,
-            all_sections=all_sections,
+            cost_result=all_sections,
             tcosts=tcosts,
             quotes_metadata=quotes_metadata
         )
@@ -715,7 +715,7 @@ class ScholarQA:
 
         # Finalization: postprocess, trace, and persist
         self.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
-        event_trace.trace_summary_event(report_data.json_summary, report_data.all_sections, report_data.tcosts)
+        event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
         event_trace.persist_trace(self.logs_config)
 
         return TaskResult(

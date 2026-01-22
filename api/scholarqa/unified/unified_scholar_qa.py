@@ -20,7 +20,7 @@ class UnifiedScholarQA(ScholarQA):
         prompt = build_prompt(query, section_references)
 
         logger.info(f"Built unified generation prompt with {len(section_references)} references")
-        logger.debug(f"Unified generation prompt:\n{prompt}")
+        logger.info(f"Unified generation prompt:\n{prompt}")
 
         # TODO: Replace with actual unified generation model call
         # For now, fall back to the parent's multi-step generation
