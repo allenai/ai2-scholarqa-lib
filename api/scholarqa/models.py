@@ -50,6 +50,16 @@ class CitationSrc(BaseModel):
     ))
 
 
+class GeneratedReportData(BaseModel):
+    """Intermediate data from report generation, before finalization."""
+    report_title: Optional[str] = Field(default=None, description="The title of the generated report")
+    sections: List["GeneratedSection"] = Field(description="The generated sections")
+    json_summary: List[Dict[str, Any]] = Field(description="JSON summary data for postprocessing")
+    all_sections: List[str] = Field(description="Raw section text for tracing")
+    tcosts: List[Any] = Field(default=[], description="Table generation costs")
+    quotes_metadata: Dict[str, Any] = Field(default={}, description="Quotes metadata for postprocessing")
+
+
 class GeneratedSection(BaseModel):
     title: str = Field(default=None, description=(
         "header for the generated section text"
