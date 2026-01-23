@@ -18,7 +18,7 @@ class ModalResponseGenerator(ResponseGenerator):
         self.model = model
 
         if not self.api_key:
-            raise ValueError("VLLM_API_KEY is required for ModalResponseGenerator")
+            raise ValueError("MODAL_PLAYGROUND_API_KEY is required for ModalResponseGenerator")
 
     def generate(self, prompt: str) -> str:
         headers = {

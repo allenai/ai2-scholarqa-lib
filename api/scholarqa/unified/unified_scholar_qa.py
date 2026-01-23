@@ -27,9 +27,14 @@ class UnifiedScholarQA(ScholarQA):
 
     def generate_report(self, query, reranked_df, paper_metadata, cost_args,
                         event_trace, user_id, inline_tags=False) -> GeneratedReportData:
+        # Setup prompt
         section_references = format_df_as_references(reranked_df, paper_metadata)
         prompt = build_prompt(query, section_references)
         logger.info(f"Built unified generation prompt with {len(section_references)} references")
+
+        model = self.multi_step_pipeline.llm_model or "allenai/sqa_basicsftdpo"
+        completion_result = None
+        response = ""
 
         # Check if we should use Modal or standard LiteLLM
         if self.response_generator:
@@ -38,16 +43,8 @@ class UnifiedScholarQA(ScholarQA):
                 response = self.response_generator.generate(prompt)
             except Exception as e:
                 logger.error(f"Custom generator failed: {e}. Falling back to default.")
-                # Fallback to standard litellm if generator fails
-                completion_result = llm_completion(
-                    user_prompt=prompt,
-                    model=self.multi_step_pipeline.llm_model,
-                    **self.llm_kwargs
-                )
-                response = completion_result.content
-        else:
-            # Standard path
-            model = self.multi_step_pipeline.llm_model
+        # If custom generator wasn't used or failed, use standard path
+        if not response:
             logger.info(f"Calling standard llm_completion model: {model}")
             completion_result = llm_completion(
                 user_prompt=prompt,
@@ -55,11 +52,6 @@ class UnifiedScholarQA(ScholarQA):
                 **self.llm_kwargs
             )
             response = completion_result.content
-
-        logger.info(f"Unified generation response:\n{response}")
-        model = self.multi_step_pipeline.llm_model
-        completion_result = llm_completion(user_prompt=prompt, model=model, **self.llm_kwargs)
-        response = completion_result.content
 
         self.report_title = parse_report_title(response)
         section_texts = parse_sections(response)
@@ -74,18 +66,27 @@ class UnifiedScholarQA(ScholarQA):
         )
         generated_sections = [self.get_gen_sections_from_json(s) for s in json_summary]
 
-        cost_result = CostAwareLLMResult(
-            result=section_texts,
-            tot_cost=completion_result.cost,
-            # trace_summary_event expects one model per section, so repeat for our single call
-            models=[model] * len(section_texts),
-            tokens=TokenUsage(
-                input=completion_result.input_tokens,
-                output=completion_result.output_tokens,
-                total=completion_result.total_tokens,
-                reasoning=completion_result.reasoning_tokens,
+        # Cost Tracking
+        if completion_result:
+            cost_result = CostAwareLLMResult(
+                result=section_texts,
+                tot_cost=completion_result.cost,
+                models=[model] * len(section_texts),
+                tokens=TokenUsage(
+                    input=completion_result.input_tokens,
+                    output=completion_result.output_tokens,
+                    total=completion_result.total_tokens,
+                    reasoning=completion_result.reasoning_tokens,
+                )
             )
-        )
+        else:
+            # Fallback for custom generator where we might not have token data
+            cost_result = CostAwareLLMResult(
+                result=section_texts,
+                tot_cost=0.0,
+                models=[model] * len(section_texts),
+                tokens=TokenUsage(input=0, output=0, total=0)
+            )
 
         return GeneratedReportData(
             report_title=self.report_title,
