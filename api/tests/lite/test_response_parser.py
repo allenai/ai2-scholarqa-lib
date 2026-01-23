@@ -2,11 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from scholarqa.unified.response_parser import (
+from scholarqa.lite.response_parser import (
     parse_report_title,
     parse_sections,
     build_per_paper_summaries,
 )
+from scholarqa.lite.prompt_utils import prepare_references_data
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -55,8 +56,10 @@ class TestBuildPerPaperSummaries:
 
     def test_extracts_citations(self, sample_response, sample_reranked_df):
         sections = parse_sections(sample_response)
+        # Get pre-computed data from prepare_references_data
+        _, per_paper_data, all_quotes_metadata = prepare_references_data(sample_reranked_df)
         per_paper_summaries, quotes_metadata = build_per_paper_summaries(
-            sections, sample_reranked_df
+            sections, per_paper_data, all_quotes_metadata
         )
         # Should find citations that match papers in reranked_df
         assert len(per_paper_summaries) > 0

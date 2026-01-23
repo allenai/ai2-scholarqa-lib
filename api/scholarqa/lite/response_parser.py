@@ -1,5 +1,5 @@
 """
-Parser for unified generation model response output.
+Parser for one-shot generation model response output.
 
 The model outputs structured text with TITLE;, SECTION;, and TLDR; markers.
 Citations are inline in format: [corpus_id | Author et al. | year | Citations: N]
@@ -8,8 +8,6 @@ Citations are inline in format: [corpus_id | Author et al. | year | Citations: N
 import logging
 import re
 from typing import Any, Dict, List, Tuple
-
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -74,41 +72,6 @@ def _convert_section_format(raw_section: str) -> str:
     return f"{title}\n{tldr_line}\n{body}"
 
 
-def _get_snippets_for_paper(
-    corpus_id: str, scored_df: pd.DataFrame
-) -> Tuple[str, List[Dict[str, Any]]]:
-    """Extract snippet text and metadata for a corpus_id from scored_df."""
-    snippets = []
-    snippet_metadata = []
-
-    for _, row in scored_df.iterrows():
-        if str(row["corpus_id"]) == corpus_id:
-            sentences = row["sentences"]
-            if sentences:
-                for sent in sentences:
-                    snippets.append(sent["text"])
-                    snippet_metadata.append({
-                        "quote": sent["text"],
-                        "section_title": sent.get("section_title", "abstract"),
-                        "pdf_hash": sent.get("pdf_hash", ""),
-                        "sentence_offsets": sent.get("sentence_offsets", []),
-                    })
-            else:
-                # Fall back to abstract if no sentences
-                abstract = row.get("abstract", "")
-                if abstract:
-                    snippets.append(abstract)
-                    snippet_metadata.append({
-                        "quote": abstract,
-                        "section_title": "abstract",
-                        "pdf_hash": "",
-                    })
-            break
-
-    combined_quote = "...".join(snippets) if snippets else ""
-    return combined_quote, snippet_metadata
-
-
 def parse_report_title(response: str) -> str:
     """Extract the report title from the TITLE; marker in the response."""
     cleaned = _strip_think_block(response)
@@ -123,11 +86,21 @@ def parse_sections(response: str) -> List[str]:
 
 
 def build_per_paper_summaries(
-    section_texts: List[str], scored_df: pd.DataFrame
+    section_texts: List[str],
+    per_paper_data: Dict[str, Dict[str, Any]],
+    all_quotes_metadata: Dict[str, List[Dict[str, Any]]],
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     """
-    Extract citations from section texts and build per_paper_summaries_extd and quotes_metadata.
-    Citations are matched back to the original snippets from scored_df.
+    Filter pre-computed per-paper data to only include citations found in section texts.
+
+    Args:
+        section_texts: List of section text strings from the model response
+        per_paper_data: Pre-computed {ref_str: {"quote": ..., "inline_citations": {}}} from prepare_references_data
+        all_quotes_metadata: Pre-computed {ref_str: [snippet_metadata]} from prepare_references_data
+
+    Returns:
+        per_paper_summaries_extd: Filtered per_paper_data for citations found in response
+        quotes_metadata: Filtered quotes_metadata for citations found in response
     """
     per_paper_summaries_extd = {}
     quotes_metadata = {}
@@ -142,14 +115,10 @@ def build_per_paper_summaries(
         seen_corpus_ids.add(corpus_id)
 
         citation_key = f"[{corpus_id} | {author_str} | {year} | Citations: {citation_count}]"
-        quote_text, snippet_meta = _get_snippets_for_paper(corpus_id, scored_df)
 
-        if quote_text:
-            per_paper_summaries_extd[citation_key] = {
-                "quote": quote_text,
-                "inline_citations": {},
-            }
-            quotes_metadata[citation_key] = snippet_meta
+        if citation_key in per_paper_data:
+            per_paper_summaries_extd[citation_key] = per_paper_data[citation_key]
+            quotes_metadata[citation_key] = all_quotes_metadata[citation_key]
 
     logger.info(f"Built per_paper_summaries with {len(per_paper_summaries_extd)} citations")
     return per_paper_summaries_extd, quotes_metadata

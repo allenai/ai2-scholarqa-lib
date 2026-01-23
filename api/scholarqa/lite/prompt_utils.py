@@ -1,0 +1,78 @@
+"""
+Prompt building and reference formatting for lite generation.
+"""
+
+import json
+from typing import Any, Dict, List, Tuple
+
+import pandas as pd
+from scholarqa.llms.prompts import UNIFIED_GENERATION_PROMPT
+
+
+def prepare_references_data(
+    scored_df: pd.DataFrame,
+) -> Tuple[Dict[str, str], Dict[str, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    references = {}
+    per_paper_data = {}
+    quotes_metadata = {}
+
+    for _, row in scored_df.iterrows():
+        # Use the reference_string already computed in retrieval.py
+        # Example: ref_str = "[12345678 | Smith and Doe | 2023 | Citations: 150]"
+        ref_str = row["reference_string"]
+
+        # Skip if we've already seen this paper
+        if ref_str in references:
+            continue
+
+        # Get retrieved sentences (snippets from full-text search)
+        # Example: sentences = [{"text": "Transformers use attention.", ...}, {"text": "This improves...", ...}]
+        sentences = row["sentences"]
+
+        if sentences:
+            # Sort sentences by char_offset to maintain document order
+            sentences = sorted(sentences, key=lambda s: s.get("char_offset", 0))
+
+            # Concatenate all snippet texts into one passage for the prompt
+            # Example: text = "Transformers use attention. This improves performance."
+            text = " ".join(sent["text"] for sent in sentences)
+
+            # Build snippet metadata for quotes_metadata
+            snippet_metadata = []
+            for sent in sentences:
+                snippet_metadata.append({
+                    "quote": sent["text"],
+                    "section_title": sent.get("section_title", "abstract"),
+                    "pdf_hash": sent.get("pdf_hash", ""),
+                    "sentence_offsets": sent.get("sentence_offsets", []),
+                })
+
+            # Combined quote uses "..." separator
+            combined_quote = "...".join(sent["text"] for sent in sentences)
+        else:
+            # Fall back to abstract if no sentences (e.g., abstract-only retrieval)
+            text = row.get("abstract", "")
+            combined_quote = text
+            snippet_metadata = []
+            if text:
+                snippet_metadata.append({
+                    "quote": text,
+                    "section_title": "abstract",
+                    "pdf_hash": "",
+                })
+
+        if text:
+            references[ref_str] = text
+            per_paper_data[ref_str] = {
+                "quote": combined_quote,
+                "inline_citations": {},
+            }
+            quotes_metadata[ref_str] = snippet_metadata
+
+    return references, per_paper_data, quotes_metadata
+
+
+def build_prompt(query: str, section_references: Dict[str, str]) -> str:
+    """Build the prompt in the format expected by the lite generation model."""
+    refs_json = json.dumps(section_references, indent=2)
+    return UNIFIED_GENERATION_PROMPT.format(query=query, refs_json=refs_json)

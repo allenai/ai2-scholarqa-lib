@@ -4,8 +4,8 @@ from scholarqa.llms.litellm_helper import llm_completion, CostAwareLLMResult, To
 from scholarqa.models import GeneratedReportData
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.scholar_qa import ScholarQA
-from scholarqa.unified.prompt_utils import format_df_as_references, build_prompt
-from scholarqa.unified.response_parser import (
+from scholarqa.lite.prompt_utils import prepare_references_data, build_prompt
+from scholarqa.lite.response_parser import (
     parse_report_title,
     parse_sections,
     build_per_paper_summaries,
@@ -14,16 +14,16 @@ from scholarqa.unified.response_parser import (
 logger = logging.getLogger(__name__)
 
 
-class UnifiedScholarQA(ScholarQA):
+class ScholarQALite(ScholarQA):
     """
     ScholarQA using one-shot generation instead of quote extraction + clustering.
     """
 
     def generate_report(self, query, reranked_df, paper_metadata, cost_args,
                         event_trace, user_id, inline_tags=False) -> GeneratedReportData:
-        section_references = format_df_as_references(reranked_df, paper_metadata)
+        section_references, per_paper_data, all_quotes_metadata = prepare_references_data(reranked_df)
         prompt = build_prompt(query, section_references)
-        logger.info(f"Built unified generation prompt with {len(section_references)} references")
+        logger.info(f"Built lite generation prompt with {len(section_references)} references")
 
         model = self.multi_step_pipeline.llm_model
         completion_result = llm_completion(user_prompt=prompt, model=model, **self.llm_kwargs)
@@ -33,7 +33,9 @@ class UnifiedScholarQA(ScholarQA):
         section_texts = parse_sections(response)
         logger.info(f"Parsed {len(section_texts)} sections from response")
 
-        per_paper_summaries_extd, quotes_metadata = build_per_paper_summaries(section_texts, reranked_df)
+        per_paper_summaries_extd, quotes_metadata = build_per_paper_summaries(
+            section_texts, per_paper_data, all_quotes_metadata
+        )
 
         citation_ids = {}
         json_summary = get_json_summary(

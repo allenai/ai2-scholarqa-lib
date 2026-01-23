@@ -270,6 +270,8 @@ The value consists of quotes from the reference, eg. "[2345677 | Doe, Moe et al.
 </citation instructions>
 
 <writing instructions>
+First, output a report title using the 'TITLE;' marker (e.g., TITLE; A Survey of Machine Learning Approaches for Text Classification).
+
 The answer should have multiple sections. Each section should have the following characteristics:
 - Before the section write a 2 sentence "TLDR;" of the section. No citations here. Precede with the text "TLDR;"
 - Use direct and simple language everywhere, like "use" and "can". Avoid using more complex words if simple ones will do.
