@@ -7,6 +7,7 @@ from typing import Union
 from uuid import uuid4, uuid5, UUID
 
 from fastapi import FastAPI, HTTPException, Request
+from functools import partial
 from nora_lib.tasks.models import TASK_STATUSES, AsyncTaskState
 from nora_lib.tasks.state import NoSuchTaskException
 
@@ -77,7 +78,18 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
-    scholar_qa = app_config.load_scholarqa(task_id, tool_request, sqa_class=ScholarQALite)
+    sqa_factory = partial(ScholarQALite, modal_config={
+        "endpoint": "https://ai2-reviz--allenai-sqa-basicsftdpo-serve.modal.run/v1",
+        "model": "allenai/sqa_basicsftdpo",
+        "api_key": os.environ.get("MODAL_PLAYGROUND_API_KEY")
+    })
+
+    scholar_qa = app_config.load_scholarqa(
+        task_id,
+        tool_request,
+        sqa_class=sqa_factory
+    )
+
     return scholar_qa.run_qa_pipeline(tool_request)
 
 

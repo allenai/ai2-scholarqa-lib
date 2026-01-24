@@ -17,6 +17,7 @@ services:
       - PYTHONUNBUFFERED=1
       - LITELLM_LOG=WARNING
       - CONFIG_PATH=run_configs/default.json
+      - MODAL_PLAYGROUND_API_KEY=${MODAL_PLAYGROUND_API_KEY}
     ports:
       - 8000:8000
     env_file:

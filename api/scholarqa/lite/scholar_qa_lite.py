@@ -1,4 +1,5 @@
 import logging
+import os
 
 from scholarqa.llms.litellm_helper import llm_completion, CostAwareLLMResult, TokenUsage
 from scholarqa.models import GeneratedReportData
@@ -16,18 +17,45 @@ logger = logging.getLogger(__name__)
 
 class ScholarQALite(ScholarQA):
     """
-    ScholarQA using one-shot generation instead of quote extraction + clustering.
+    ScholarQA using one-shot generation. Integrated with CostAwareLLMCaller.
     """
+    def __init__(self, *args, modal_config: dict = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.modal_config = modal_config
 
     def generate_report(self, query, reranked_df, paper_metadata, cost_args,
                         event_trace, user_id, inline_tags=False) -> GeneratedReportData:
+
+        # Prepare data and prompt
         section_references, per_paper_data, all_quotes_metadata = prepare_references_data(reranked_df)
         prompt = build_prompt(query, section_references)
-        logger.info(f"Built lite generation prompt with {len(section_references)} references")
 
-        model = self.multi_step_pipeline.llm_model
-        completion_result = llm_completion(user_prompt=prompt, model=model, **self.llm_kwargs)
-        response = completion_result.content
+        if self.modal_config:
+            llm_params = {
+                "model": f"openai/{self.modal_config['model']}",
+                "api_base": self.modal_config['endpoint'],
+                "api_key": self.modal_config.get("api_key") or os.environ.get("MODAL_PLAYGROUND_API_KEY"),
+                "temperature": 0.1,
+                "max_tokens": 4096,
+                "fallback": None
+            }
+            logger.info(f"Routing to Modal: {self.modal_config['endpoint']} with model {llm_params['model']}")
+        else:
+            # Standard Path
+            llm_params = {
+                "model": self.multi_step_pipeline.llm_model,
+                **self.llm_kwargs
+            }
+        print(f"AHAH DEBUG: api_base is {llm_params['api_base']}")
+
+        llm_result: CostAwareLLMResult = self.llm_caller.call_method(
+            cost_args=cost_args,
+            method=llm_completion,
+            user_prompt=prompt,
+            **llm_params
+        )
+
+        response = llm_result.result.content
 
         self.report_title = parse_report_title(response)
         section_texts = parse_sections(response)
@@ -38,23 +66,19 @@ class ScholarQALite(ScholarQA):
         )
 
         citation_ids = {}
+        actual_model = llm_result.models[0]
+
         json_summary = get_json_summary(
-            model, section_texts, per_paper_summaries_extd,
+            actual_model, section_texts, per_paper_summaries_extd,
             paper_metadata, citation_ids, inline_tags
         )
         generated_sections = [self.get_gen_sections_from_json(s) for s in json_summary]
 
         cost_result = CostAwareLLMResult(
             result=section_texts,
-            tot_cost=completion_result.cost,
-            # trace_summary_event expects one model per section, so repeat for our single call
-            models=[model] * len(section_texts),
-            tokens=TokenUsage(
-                input=completion_result.input_tokens,
-                output=completion_result.output_tokens,
-                total=completion_result.total_tokens,
-                reasoning=completion_result.reasoning_tokens,
-            )
+            tot_cost=llm_result.tot_cost,
+            models=[actual_model] * len(section_texts),
+            tokens=llm_result.tokens
         )
 
         return GeneratedReportData(

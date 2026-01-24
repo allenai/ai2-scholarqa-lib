@@ -127,21 +127,47 @@ def llm_completion(user_prompt: str, system_prompt: str = None, fallback=GPT_5_C
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_prompt})
-    response = litellm.completion_with_retries(messages=messages, retry_strategy=RETRY_STRATEGY,
-                                               num_retries=NUM_RETRIES, fallbacks=fallbacks, **llm_lite_params)
 
-    res_cost = round(litellm.completion_cost(response), 6)
+
+    response = litellm.completion_with_retries(
+        messages=messages,
+        retry_strategy=RETRY_STRATEGY,
+        num_retries=NUM_RETRIES,
+        fallbacks=fallbacks,
+        **llm_lite_params
+    )
+
+    # Try to calculate cost, but default to 0.0 if the model is unknown/unmapped
+    try:
+        res_cost = round(litellm.completion_cost(response), 6)
+    except Exception:
+        res_cost = 0.0
+
     res_usage = response.usage
-    reasoning_tokens = 0 if not (res_usage.completion_tokens_details and
-                                 res_usage.completion_tokens_details.reasoning_tokens) else \
-        res_usage.completion_tokens_details.reasoning_tokens
+
+    # Safe extraction of reasoning tokens
+    reasoning_tokens = 0
+    if hasattr(res_usage, 'completion_tokens_details') and res_usage.completion_tokens_details:
+        reasoning_tokens = getattr(res_usage.completion_tokens_details, 'reasoning_tokens', 0) or 0
+
     res_str = response["choices"][0]["message"]["content"]
     if res_str is None:
         logger.warning("Content returned as None, checking for response in tool_calls...")
-        res_str = response["choices"][0]["message"]["tool_calls"][0].function.arguments
-    cost_tuple = CompletionResult(content=res_str.strip(), model=response.model,
-                                  cost=res_cost if not response.get("cache_hit") else 0.0,
-                                  input_tokens=res_usage.prompt_tokens,
-                                  output_tokens=res_usage.completion_tokens, total_tokens=res_usage.total_tokens,
-                                  reasoning_tokens=reasoning_tokens)
+        try:
+            res_str = response["choices"][0]["message"]["tool_calls"][0].function.arguments
+        except (IndexError, AttributeError):
+            res_str = ""
+
+    model_identifier = str(response.model or llm_lite_params.get("model") or "custom-model")
+
+    cost_tuple = CompletionResult(
+        content=res_str.strip(),
+        model=model_identifier,
+        cost=res_cost if not response.get("cache_hit") else 0.0,
+        input_tokens=res_usage.prompt_tokens or 0,
+        output_tokens=res_usage.completion_tokens or 0,
+        total_tokens=res_usage.total_tokens or 0,
+        reasoning_tokens=reasoning_tokens
+    )
+
     return cost_tuple
