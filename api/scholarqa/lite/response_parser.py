@@ -9,6 +9,8 @@ import logging
 import re
 from typing import Any, Dict, List, Tuple
 
+from anyascii import anyascii
+
 logger = logging.getLogger(__name__)
 
 # Regex pattern for inline citations: [corpus_id | Author et al. | year | Citations: N]
@@ -114,7 +116,7 @@ def build_per_paper_summaries(
             continue
         seen_corpus_ids.add(corpus_id)
 
-        citation_key = f"[{corpus_id} | {author_str} | {year} | Citations: {citation_count}]"
+        citation_key = anyascii(f"[{corpus_id} | {author_str.strip()} | {year} | Citations: {citation_count}]")
 
         if citation_key in per_paper_data:
             per_paper_summaries_extd[citation_key] = per_paper_data[citation_key]

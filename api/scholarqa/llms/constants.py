@@ -19,3 +19,6 @@ CostReportingArgs = namedtuple("CostReportingArgs", ["task_id", "user_id", "msg_
 TokenUsage = namedtuple("TokenUsage", ["input", "output", "total", "reasoning"])
 
 CostAwareLLMResult = namedtuple("CostAwareLLMResult", ["result", "tot_cost", "models", "tokens"])
+
+# Step progress status messages
+STATUS_SYNTHESIS = "Synthesizing an answer outline based on extracted quotes"

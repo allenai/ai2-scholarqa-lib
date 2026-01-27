@@ -6,7 +6,17 @@ import json
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
+from anyascii import anyascii
 from scholarqa.llms.prompts import UNIFIED_GENERATION_PROMPT
+
+
+def normalize_snippet_quote(text: str) -> str:
+    """
+    Normalize quote for matching after "...".join() and split("...").
+
+    Strips trailing periods to avoid "s1." + "..." + "s2" = "s1....s2" splitting to ".s2".
+    """
+    return anyascii(text.strip()).rstrip(".")
 
 
 def prepare_references_data(
@@ -34,29 +44,31 @@ def prepare_references_data(
             sentences = sorted(sentences, key=lambda s: s.get("char_offset", 0))
 
             # Concatenate all snippet texts into one passage for the prompt
-            # Example: text = "Transformers use attention. This improves performance."
             text = " ".join(sent["text"] for sent in sentences)
 
-            # Build snippet metadata for quotes_metadata
             snippet_metadata = []
+            normalized_quotes = []
             for sent in sentences:
+                quote = normalize_snippet_quote(sent["text"])
+                normalized_quotes.append(quote)
                 snippet_metadata.append({
-                    "quote": sent["text"],
+                    "quote": quote,
                     "section_title": sent.get("section_title", "abstract"),
                     "pdf_hash": sent.get("pdf_hash", ""),
                     "sentence_offsets": sent.get("sentence_offsets", []),
                 })
 
-            # Combined quote uses "..." separator
-            combined_quote = "...".join(sent["text"] for sent in sentences)
+            # Combined quote uses same normalized texts so splitting produces matching quotes
+            combined_quote = "...".join(normalized_quotes)
         else:
             # Fall back to abstract if no sentences (e.g., abstract-only retrieval)
             text = row.get("abstract", "")
             combined_quote = text
             snippet_metadata = []
             if text:
+                quote = normalize_snippet_quote(text)
                 snippet_metadata.append({
-                    "quote": text,
+                    "quote": quote,
                     "section_title": "abstract",
                     "pdf_hash": "",
                 })

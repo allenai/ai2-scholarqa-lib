@@ -12,7 +12,7 @@ from langsmith import traceable
 from difflib import SequenceMatcher
 
 from scholarqa.config.config_setup import LogsConfig
-from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT
+from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT, STATUS_SYNTHESIS
 from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
 from scholarqa.models import GeneratedSection, GeneratedReportData, TaskResult, ToolRequest, CitationSrc
@@ -194,7 +194,6 @@ class ScholarQA:
     def step_clustering(self, query: str, per_paper_summaries: Dict[str, str], cost_args: CostReportingArgs = None,
                         sys_prompt: str = SYSTEM_PROMPT_QUOTE_CLUSTER) -> CostAwareLLMResult:
         logger.info("Running Step 2: Clustering the extracted quotes into meaningful dimensions")
-        self.update_task_state("Synthesizing an answer outline based on extracted quotes", step_estimated_time=15)
         start = time()
         cost_args = cost_args._replace(model=self.multi_step_pipeline.llm_model)._replace(
             description="Corpus QA Step 2: Clustering quotes into dimensions")
@@ -703,6 +702,7 @@ class ScholarQA:
                 "No relevant papers found for the query post reranking, skipping quote extraction.")
         event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
 
+        self.update_task_state(STATUS_SYNTHESIS)
         report_data = self.generate_report(
             query=query,
             reranked_df=reranked_df,
