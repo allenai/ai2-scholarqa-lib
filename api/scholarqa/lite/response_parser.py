@@ -1,7 +1,7 @@
 """
 Parser for one-shot generation model response output.
 
-The model outputs structured text with TITLE;, SECTION;, and TLDR; markers.
+The model outputs structured text with SECTION; and TLDR; markers.
 Citations are inline in format: [corpus_id | Author et al. | year | Citations: N]
 """
 
@@ -24,20 +24,9 @@ def _strip_think_block(response: str) -> str:
     return re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
 
 
-def _extract_title(response: str) -> str:
-    """Extract title from TITLE; marker in response."""
-    match = re.search(r"TITLE;\s*(.+?)(?:\n|SECTION;)", response, re.DOTALL)
-    if match:
-        title = match.group(1).strip()
-        logger.info(f"Extracted report title: '{title}'")
-        return title
-    logger.warning("No TITLE; marker found in response")
-    return ""
-
-
 def _extract_sections_raw(response: str) -> List[str]:
     """Split response into raw section strings on SECTION; markers."""
-    # Example input: "TITLE; ...\nSECTION; Intro\nTLDR; ...\nBody...\nSECTION; Methods\n..."
+    # Example input: "SECTION; Intro\nTLDR; ...\nBody...\nSECTION; Methods\n..."
     first_section = response.find("SECTION;")
     if first_section == -1:
         return []
@@ -72,12 +61,6 @@ def _convert_section_format(raw_section: str) -> str:
 
     # Return normalized format: "Title\nTLDR line\nBody"
     return f"{title}\n{tldr_line}\n{body}"
-
-
-def parse_report_title(response: str) -> str:
-    """Extract the report title from the TITLE; marker in the response."""
-    cleaned = _strip_think_block(response)
-    return _extract_title(cleaned)
 
 
 def parse_sections(response: str) -> List[str]:

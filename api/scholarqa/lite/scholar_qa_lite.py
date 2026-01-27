@@ -8,7 +8,6 @@ from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.scholar_qa import ScholarQA
 from scholarqa.lite.prompt_utils import prepare_references_data, build_prompt
 from scholarqa.lite.response_parser import (
-    parse_report_title,
     parse_sections,
     build_per_paper_summaries,
 )
@@ -40,11 +39,10 @@ class ScholarQALite(ScholarQA):
         if "api_key" not in llm_kwargs:
             llm_kwargs["api_key"] = os.environ.get("REPORT_GENERATION_API_KEY")
         register_model(model, llm_kwargs)
-        logger.info(f"Using model {model} for report generation")
+
         completion_result = llm_completion(user_prompt=prompt, model=model, fallback=None, **llm_kwargs)
         response = completion_result.content
 
-        self.report_title = parse_report_title(response)
         section_texts = parse_sections(response)
         logger.info(f"Parsed {len(section_texts)} sections from response")
 
@@ -62,7 +60,6 @@ class ScholarQALite(ScholarQA):
         cost_result = CostAwareLLMResult(
             result=section_texts,
             tot_cost=completion_result.cost,
-            # trace_summary_event expects one model per section, so repeat for our single call
             models=[model] * len(section_texts),
             tokens=TokenUsage(
                 input=completion_result.input_tokens,
@@ -73,7 +70,7 @@ class ScholarQALite(ScholarQA):
         )
 
         return GeneratedReportData(
-            report_title=self.report_title,
+            report_title="",
             sections=generated_sections,
             json_summary=json_summary,
             cost_result=cost_result,

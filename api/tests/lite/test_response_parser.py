@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from scholarqa.lite.response_parser import (
-    parse_report_title,
     parse_sections,
     build_per_paper_summaries,
 )
@@ -23,13 +22,6 @@ def sample_reranked_df():
     import pandas as pd
     data = json.loads((FIXTURES_DIR / "reranked_df.json").read_text())
     return pd.DataFrame(data)
-
-
-class TestParseReportTitle:
-
-    def test_extracts_title(self, sample_response):
-        title = parse_report_title(sample_response)
-        assert title == "Latest Advances in Transformer Architectures"
 
 
 class TestParseSections:
