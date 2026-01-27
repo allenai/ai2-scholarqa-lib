@@ -50,8 +50,12 @@ def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Typ
     else:
         paper_finder = PaperFinder(retriever, **run_config.paper_finder_args)
 
+    init_kwargs = {**run_config.pipeline_args, **sqa_args}
+    if run_config.report_generation_args:
+        init_kwargs["report_generation_args"] = run_config.report_generation_args
+
     return sqa_class(paper_finder=paper_finder, task_id=task_id, state_mgr=app_config.state_mgr_client,
-                     logs_config=logs_config, **run_config.pipeline_args, **sqa_args)
+                     logs_config=logs_config, **init_kwargs)
 
 
 # setup logging config and local litellm cache
@@ -77,7 +81,7 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
-    scholar_qa = app_config.load_scholarqa(task_id, tool_request)
+    scholar_qa = app_config.load_scholarqa(task_id, tool_request, sqa_class=ScholarQALite)
     return scholar_qa.run_qa_pipeline(tool_request)
 
 

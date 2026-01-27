@@ -96,7 +96,7 @@ class ToolResponse(BaseModel):
 class TaskStep(BaseModel):
     description: str = Field(description="The step in the task")
     start_timestamp: float = Field(description="The timestamp when the step was started")
-    estimated_timestamp: float = Field(description="The estimated timestamp for the step to complete", default=None)
+    estimated_timestamp: Optional[float] = Field(description="The estimated timestamp for the step to complete", default=None)
 
 
 class AsyncTaskState(BaseAsyncTaskState[TaskResult]):
