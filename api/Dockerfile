@@ -21,5 +21,7 @@ ENV PYTHONPATH /api
 # Copy over the source code
 COPY . .
 
+RUN pip install pytest && pytest tests/lite/
+
 # Kick things off
 ENTRYPOINT [ "/api/dev.sh" ]

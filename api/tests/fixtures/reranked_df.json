@@ -1,0 +1,1114 @@
+[
+  {
+    "externalIds": {
+      "DBLP": "journals/access/Chitty-VenkataE22",
+      "DOI": "10.1109/ACCESS.2022.3212767",
+      "CorpusId": 252788259
+    },
+    "publicationVenue": {
+      "id": "2633f5b2-c15c-49fe-80f5-07523e770c26",
+      "name": "IEEE Access",
+      "type": "journal",
+      "issn": "2169-3536",
+      "url": "http://www.ieee.org/publications_standards/publications/ieee_access.html",
+      "alternate_urls": [
+        "http://ieeexplore.ieee.org/servlet/opac?punumber=6287639"
+      ]
+    },
+    "title": "Neural Architecture Search for Transformers: A Survey",
+    "venue": "IEEE Access",
+    "year": 2022,
+    "reference_count": 250,
+    "citation_count": 93,
+    "influential_citation_count": 3,
+    "isOpenAccess": true,
+    "openAccessPdf": {
+      "url": "https://ieeexplore.ieee.org/ielx7/6287639/6514899/09913476.pdf",
+      "status": "GOLD",
+      "license": "CCBY",
+      "disclaimer": "Notice: Paper or abstract available at https://api.unpaywall.org/v2/10.1109/ACCESS.2022.3212767?email=<INSERT_YOUR_EMAIL> or https://doi.org/10.1109/ACCESS.2022.3212767, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "s2FieldsOfStudy": [
+      "Computer Science",
+      "Engineering"
+    ],
+    "authors": [
+      {
+        "authorId": "1418875123",
+        "name": "Krishna Teja Chitty-Venkata"
+      },
+      {
+        "authorId": "2157261",
+        "name": "M. Emani"
+      },
+      {
+        "authorId": "3348747",
+        "name": "V. Vishwanath"
+      },
+      {
+        "authorId": "35088844",
+        "name": "Arun Somani"
+      }
+    ],
+    "abstract": "Transformer-based Deep Neural Network architectures have gained tremendous interest due to their effectiveness in various applications across Natural Language Processing (NLP) and Computer Vision (CV) domains. These models are the de facto choice in several language tasks, such as Sentiment Analysis and Text Summarization, replacing Long Short Term Memory (LSTM) model. Vision Transformers (ViTs) have shown better model performance than traditional Convolutional Neural Networks (CNNs) in vision applications while requiring significantly fewer parameters and training time. The design pipeline of a neural architecture for a given task and dataset is extremely challenging as it requires expertise in several interdisciplinary areas such as signal processing, image processing, optimization and allied fields. Neural Architecture Search (NAS) is a promising technique to automate the architectural design process of a Neural Network in a data-driven way using Machine Learning (ML) methods. The search method explores several architectures without requiring significant human effort, and the searched models outperform the manually built networks. In this paper, we review Neural Architecture Search techniques, targeting the Transformer model and its family of architectures such as Bidirectional Encoder Representations from Transformers (BERT) and Vision Transformers. We provide an in-depth literature review of approximately 50 state-of-the-art Neural Architecture Search methods and explore future directions in this fast-evolving class of problems.",
+    "corpus_id": 252788259,
+    "sentences": [
+      {
+        "corpus_id": "252788259",
+        "title": "Neural Architecture Search for Transformers: A Survey",
+        "text": "Transformer network design is a challenging problem with important applications in several tasks and hardware platforms. In the last few years, Neural Architecture Search and Hardware-aware NAS methods have significantly contributed to the automatic design of efficient Transformer, BERT, and Vision Transformer models. The automatically searched Transformers outperformed many manually designed Transformer architectures in terms of model and hardware performance. In this survey paper, we extensively reviewed recent advances related to NAS algorithms specific to Transformer and its family of architectures. We mainly summarized the search space, search strategy, and performance of the searched Transformer of state-of-the-art NAS methods. A diverse set of methods have developed over the last two years with innovations in architecture design and learning methodologies, which are analyzed in different sections. Although the performance of NAS algorithms has been greatly enhanced, the SOTA methods still have limitations, some of which are outlined in this paper. We hope our effort helps the reader understand the latest in Transformer NAS and ignites interest in developing novel and efficient methods.",
+        "score": 0.4280546303,
+        "section_title": "XII. CONCLUSION",
+        "char_start_offset": 121860,
+        "sentence_offsets": [
+          {
+            "start": 0,
+            "end": 120,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 274.0,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 286.0,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 298.0,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 25.7
+              }
+            ]
+          },
+          {
+            "start": 121,
+            "end": 319,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 309.9,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 321.9,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 333.8,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 174.2
+              },
+              {
+                "page": 33,
+                "top": 298.0,
+                "left": 66.8,
+                "h": 8.9,
+                "w": 210.6
+              }
+            ]
+          },
+          {
+            "start": 320,
+            "end": 465,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 345.8,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 357.7,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 369.7,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 92.9
+              },
+              {
+                "page": 33,
+                "top": 333.8,
+                "left": 217.1,
+                "h": 8.9,
+                "w": 60.3
+              }
+            ]
+          },
+          {
+            "start": 466,
+            "end": 610,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 381.6,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 393.6,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 192.5
+              },
+              {
+                "page": 33,
+                "top": 369.7,
+                "left": 132.2,
+                "h": 8.9,
+                "w": 145.2
+              }
+            ]
+          },
+          {
+            "start": 611,
+            "end": 743,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 405.5,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 417.5,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 429.5,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 36.3
+              },
+              {
+                "page": 33,
+                "top": 393.6,
+                "left": 232.7,
+                "h": 8.9,
+                "w": 44.7
+              }
+            ]
+          },
+          {
+            "start": 744,
+            "end": 917,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 441.4,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 453.4,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 465.3,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 34.6
+              },
+              {
+                "page": 33,
+                "top": 429.5,
+                "left": 77.4,
+                "h": 8.9,
+                "w": 200.0
+              }
+            ]
+          },
+          {
+            "start": 918,
+            "end": 1070,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 477.3,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 489.2,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 187.6
+              },
+              {
+                "page": 33,
+                "top": 465.3,
+                "left": 74.0,
+                "h": 8.9,
+                "w": 203.4
+              }
+            ]
+          },
+          {
+            "start": 1071,
+            "end": 1211,
+            "boundingBoxes": [
+              {
+                "page": 33,
+                "top": 501.2,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 513.1,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 241.2
+              },
+              {
+                "page": 33,
+                "top": 525.1,
+                "left": 36.2,
+                "h": 8.9,
+                "w": 36.3
+              },
+              {
+                "page": 33,
+                "top": 489.2,
+                "left": 226.4,
+                "h": 8.9,
+                "w": 50.9
+              }
+            ]
+          }
+        ],
+        "ref_mentions": [],
+        "pdf_hash": "6975bb07c09526ccd72669408b11cfb068b43825",
+        "stype": "vespa",
+        "rerank_score": 0.990234375
+      }
+    ],
+    "relevance_judgement": 0.990234375,
+    "relevance_judgment_input_expanded": "# Title: Neural Architecture Search for Transformers: A Survey\n# Venue: IEEE Access\n# Authors: Krishna Teja Chitty-Venkata, M. Emani, V. Vishwanath, Arun Somani\n## Abstract\nTransformer-based Deep Neural Network architectures have gained tremendous interest due to their effectiveness in various applications across Natural Language Processing (NLP) and Computer Vision (CV) domains. These models are the de facto choice in several language tasks, such as Sentiment Analysis and Text Summarization, replacing Long Short Term Memory (LSTM) model. Vision Transformers (ViTs) have shown better model performance than traditional Convolutional Neural Networks (CNNs) in vision applications while requiring significantly fewer parameters and training time. The design pipeline of a neural architecture for a given task and dataset is extremely challenging as it requires expertise in several interdisciplinary areas such as signal processing, image processing, optimization and allied fields. Neural Architecture Search (NAS) is a promising technique to automate the architectural design process of a Neural Network in a data-driven way using Machine Learning (ML) methods. The search method explores several architectures without requiring significant human effort, and the searched models outperform the manually built networks. In this paper, we review Neural Architecture Search techniques, targeting the Transformer model and its family of architectures such as Bidirectional Encoder Representations from Transformers (BERT) and Vision Transformers. We provide an in-depth literature review of approximately 50 state-of-the-art Neural Architecture Search methods and explore future directions in this fast-evolving class of problems.\n## XII. CONCLUSION\nTransformer network design is a challenging problem with important applications in several tasks and hardware platforms. In the last few years, Neural Architecture Search and Hardware-aware NAS methods have significantly contributed to the automatic design of efficient Transformer, BERT, and Vision Transformer models. The automatically searched Transformers outperformed many manually designed Transformer architectures in terms of model and hardware performance. In this survey paper, we extensively reviewed recent advances related to NAS algorithms specific to Transformer and its family of architectures. We mainly summarized the search space, search strategy, and performance of the searched Transformer of state-of-the-art NAS methods. A diverse set of methods have developed over the last two years with innovations in architecture design and learning methodologies, which are analyzed in different sections. Although the performance of NAS algorithms has been greatly enhanced, the SOTA methods still have limitations, some of which are outlined in this paper. We hope our effort helps the reader understand the latest in Transformer NAS and ignites interest in developing novel and efficient methods.",
+    "reference_string": "[252788259 | Chitty-Venkata et al. | 2022 | Citations: 93]"
+  },
+  {
+    "externalIds": {
+      "ArXiv": "2509.10530",
+      "DBLP": "journals/corr/abs-2509-10530",
+      "DOI": "10.48550/arXiv.2509.10530",
+      "CorpusId": 281315524
+    },
+    "publicationVenue": {
+      "id": "1901e811-ee72-4b20-8f7e-de08cd395a10",
+      "name": "arXiv.org",
+      "alternate_names": [
+        "ArXiv"
+      ],
+      "issn": "2331-8422",
+      "url": "https://arxiv.org"
+    },
+    "title": "Dynamic Adaptive Shared Experts with Grouped Multi-Head Attention Mixture of Experts",
+    "venue": "arXiv.org",
+    "year": 2025,
+    "reference_count": 63,
+    "citation_count": 0,
+    "influential_citation_count": 0,
+    "isOpenAccess": false,
+    "openAccessPdf": {
+      "url": "",
+      "status": null,
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2509.10530, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "s2FieldsOfStudy": [
+      "Computer Science"
+    ],
+    "authors": [
+      {
+        "authorId": "2350614434",
+        "name": "Cheng Li"
+      },
+      {
+        "authorId": "2349253085",
+        "name": "Jiexiong Liu"
+      },
+      {
+        "authorId": "2349304738",
+        "name": "Yixuan Chen"
+      },
+      {
+        "authorId": "2111810307",
+        "name": "Jie Ji"
+      }
+    ],
+    "abstract": "Transformer models based on the Mixture of Experts (MoE) architecture have made significant progress in long-sequence modeling, but existing models still have shortcomings in computational efficiency and the ability to capture long-range dependencies, especially in terms of the dynamic adaptability of expert resource allocation. In this paper, we propose a Dynamic Adaptive Shared Expert and Grouped Multi-Head Attention Hybrid Model (DASG-MoE) to enhance long-sequence modeling capabilities by integrating three modules. First, we employ the Grouped Multi-Head Attention (GMHA) mechanism to effectively reduce the computational complexity of long sequences. By parallel processing through sequence grouping, local sliding window attention, and feature aggregation, we address long-range dependency issues and the model's lack of generalization for local information. Second, we design a Dual-Scale Shared Expert Structure (DSSE), where shallow experts use lightweight computations to quickly respond to low-dimensional features, while deep experts process high-dimensional complex semantics through pre-training transfer and post-training optimization, achieving a dynamic balance between efficiency and accuracy. Third, we propose a hierarchical Adaptive Dynamic Routing (ADR) mechanism that dynamically selects expert levels based on feature complexity and task requirements, and optimizes resource allocation through a local expert activation strategy. Experiments on multiple long-sequence benchmark datasets demonstrate that our DASG-MoE model outperforms state-of-the-art models.",
+    "corpus_id": 281315524,
+    "sentences": [
+      {
+        "corpus_id": "281315524",
+        "title": "Dynamic Adaptive Shared Experts with Grouped Multi-Head Attention Mixture of Experts",
+        "text": "The advent of self-attention mechanisms has enabled Transformer architectures to fundamentally transform how sequence data is processed, spurring extensive research into improving their computational efficiency, scalability, and versatility for diverse practical applications. Research efforts to optimize Transformer designs can be organized into three primary categories. \n\nThe first research direction addresses the computational burden inherent in attention mechanisms, specifically targeting the quadratic scaling complexity that increases with input sequence length. Representative approaches include Linformer, Reformer, and Performer, which modify attention computation strategies to achieve reduced computational overhead while preserving the fundamental advantages of self-attention architectures.The second research stream concentrates on parameter reduction strategies that maintain model performance while decreasing memory requirements. ALBERT exemplifies this approach by implementing cross-layer parameter sharing techniques, achieving significant model compression without sacrificing predictive accuracy.The third research category encompasses MoE methodologies, which have demonstrated remarkable success in scaling Transformer models to trillion-parameter sizes while avoiding proportional computational cost increases. These techniques enable efficient model scaling through selective expert activation. This research advances the third category by introducing a novel Dynamic Adaptive Shared Expert and Grouped Multi-Head Attention Hybrid Model (DASG-MoE) architecture that incorporates adaptive expert selection mechanisms. \n\nIn the domain of deep learning, the MoE architecture has propelled numerous innovations, especially regarding the expansion of models designed for natural language processing. Initially introduced by Jacobs and colleagues during the 1990s, this approach sought to develop specialized networks that concentrate on distinct portions of the data domain. Fundamental to MoE systems is a gating network, often termed a router, tasked with identifying the most suitable specialist for handling specific instances. Subsequent portions of this discussion outline key strategies for routing within these frameworks: \n\n\u2022 The Switch Transformer [6], introduced by Fedus and collaborators at Google, streamlines the gating mechanism in MoE architectures through assigning individual tokens solely to one specialist for computation. While this configuration substantially decreases data transfer overhead and bolsters the robustness of training procedures, it continues to rely on static selection protocols for experts, without provisions for varying the quantity of active specialists in response to differing levels of input sophistication. \n\n\u2022 Google's GLaM [13] architecture incorporates a mechanism for selecting the top two experts, directing individual tokens to those exhibiting the peak activation levels.",
+        "score": 0.3976510271,
+        "section_title": "Related Work",
+        "char_start_offset": 5766,
+        "sentence_offsets": [
+          {
+            "start": 0,
+            "end": 276,
+            "boundingBoxes": [
+              {
+                "page": 2,
+                "top": 704.2,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 2,
+                "top": 715.2,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 2,
+                "top": 726.1,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 110.7
+              }
+            ]
+          },
+          {
+            "start": 277,
+            "end": 373,
+            "boundingBoxes": [
+              {
+                "page": 2,
+                "top": 726.1,
+                "left": 171.4,
+                "h": 9.0,
+                "w": 384.0
+              }
+            ]
+          },
+          {
+            "start": 376,
+            "end": 572,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 59.9,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 70.9,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 308.0
+              }
+            ]
+          },
+          {
+            "start": 573,
+            "end": 950,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 81.8,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 92.8,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 103.8,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 387.2
+              },
+              {
+                "page": 3,
+                "top": 70.9,
+                "left": 370.0,
+                "h": 9.0,
+                "w": 185.3
+              }
+            ]
+          },
+          {
+            "start": 951,
+            "end": 1339,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 114.7,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 125.7,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 136.6,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 103.8,
+                "left": 450.6,
+                "h": 9.0,
+                "w": 104.7
+              }
+            ]
+          },
+          {
+            "start": 1340,
+            "end": 1424,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 147.6,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 334.3
+              }
+            ]
+          },
+          {
+            "start": 1425,
+            "end": 1646,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 169.5,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 461.1
+              },
+              {
+                "page": 3,
+                "top": 158.6,
+                "left": 71.6,
+                "h": 9.0,
+                "w": 483.7
+              }
+            ]
+          },
+          {
+            "start": 1649,
+            "end": 1824,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 191.4,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 245.8
+              },
+              {
+                "page": 3,
+                "top": 180.5,
+                "left": 71.6,
+                "h": 9.0,
+                "w": 483.7
+              }
+            ]
+          },
+          {
+            "start": 1825,
+            "end": 1999,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 202.4,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 442.0
+              },
+              {
+                "page": 3,
+                "top": 191.4,
+                "left": 306.4,
+                "h": 9.0,
+                "w": 249.0
+              }
+            ]
+          },
+          {
+            "start": 2000,
+            "end": 2156,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 213.4,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 498.6
+              },
+              {
+                "page": 3,
+                "top": 224.3,
+                "left": 56.7,
+                "h": 9.0,
+                "w": 71.1
+              },
+              {
+                "page": 3,
+                "top": 202.4,
+                "left": 502.7,
+                "h": 9.0,
+                "w": 52.6
+              }
+            ]
+          },
+          {
+            "start": 2157,
+            "end": 2255,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 224.3,
+                "left": 131.8,
+                "h": 9.0,
+                "w": 392.0
+              }
+            ]
+          },
+          {
+            "start": 2258,
+            "end": 2468,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 239.0,
+                "left": 72.0,
+                "h": 9.0,
+                "w": 483.3
+              },
+              {
+                "page": 3,
+                "top": 249.9,
+                "left": 81.6,
+                "h": 9.0,
+                "w": 368.5
+              }
+            ]
+          },
+          {
+            "start": 2469,
+            "end": 2779,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 260.9,
+                "left": 81.6,
+                "h": 9.0,
+                "w": 473.7
+              },
+              {
+                "page": 3,
+                "top": 271.9,
+                "left": 81.6,
+                "h": 9.0,
+                "w": 473.7
+              },
+              {
+                "page": 3,
+                "top": 282.8,
+                "left": 81.6,
+                "h": 9.0,
+                "w": 153.7
+              },
+              {
+                "page": 3,
+                "top": 249.9,
+                "left": 456.3,
+                "h": 9.0,
+                "w": 99.0
+              }
+            ]
+          },
+          {
+            "start": 2782,
+            "end": 2951,
+            "boundingBoxes": [
+              {
+                "page": 3,
+                "top": 297.5,
+                "left": 72.0,
+                "h": 9.0,
+                "w": 483.3
+              },
+              {
+                "page": 3,
+                "top": 308.4,
+                "left": 81.6,
+                "h": 9.0,
+                "w": 189.2
+              }
+            ]
+          }
+        ],
+        "ref_mentions": [
+          {
+            "start": 2283,
+            "end": 2286,
+            "matchedPaperCorpusId": "231573431"
+          }
+        ],
+        "pdf_hash": "bb127eb00b7a18a6833b4d7c532a2121d9d628bc",
+        "stype": "vespa",
+        "rerank_score": 0.9794921875
+      }
+    ],
+    "relevance_judgement": 0.9794921875,
+    "relevance_judgment_input_expanded": "# Title: Dynamic Adaptive Shared Experts with Grouped Multi-Head Attention Mixture of Experts\n# Venue: arXiv.org\n# Authors: Cheng Li, Jiexiong Liu, Yixuan Chen, Jie Ji\n## Abstract\nTransformer models based on the Mixture of Experts (MoE) architecture have made significant progress in long-sequence modeling, but existing models still have shortcomings in computational efficiency and the ability to capture long-range dependencies, especially in terms of the dynamic adaptability of expert resource allocation. In this paper, we propose a Dynamic Adaptive Shared Expert and Grouped Multi-Head Attention Hybrid Model (DASG-MoE) to enhance long-sequence modeling capabilities by integrating three modules. First, we employ the Grouped Multi-Head Attention (GMHA) mechanism to effectively reduce the computational complexity of long sequences. By parallel processing through sequence grouping, local sliding window attention, and feature aggregation, we address long-range dependency issues and the model's lack of generalization for local information. Second, we design a Dual-Scale Shared Expert Structure (DSSE), where shallow experts use lightweight computations to quickly respond to low-dimensional features, while deep experts process high-dimensional complex semantics through pre-training transfer and post-training optimization, achieving a dynamic balance between efficiency and accuracy. Third, we propose a hierarchical Adaptive Dynamic Routing (ADR) mechanism that dynamically selects expert levels based on feature complexity and task requirements, and optimizes resource allocation through a local expert activation strategy. Experiments on multiple long-sequence benchmark datasets demonstrate that our DASG-MoE model outperforms state-of-the-art models.\n## Related Work\nThe advent of self-attention mechanisms has enabled Transformer architectures to fundamentally transform how sequence data is processed, spurring extensive research into improving their computational efficiency, scalability, and versatility for diverse practical applications. Research efforts to optimize Transformer designs can be organized into three primary categories. \n\nThe first research direction addresses the computational burden inherent in attention mechanisms, specifically targeting the quadratic scaling complexity that increases with input sequence length. Representative approaches include Linformer, Reformer, and Performer, which modify attention computation strategies to achieve reduced computational overhead while preserving the fundamental advantages of self-attention architectures.The second research stream concentrates on parameter reduction strategies that maintain model performance while decreasing memory requirements. ALBERT exemplifies this approach by implementing cross-layer parameter sharing techniques, achieving significant model compression without sacrificing predictive accuracy.The third research category encompasses MoE methodologies, which have demonstrated remarkable success in scaling Transformer models to trillion-parameter sizes while avoiding proportional computational cost increases. These techniques enable efficient model scaling through selective expert activation. This research advances the third category by introducing a novel Dynamic Adaptive Shared Expert and Grouped Multi-Head Attention Hybrid Model (DASG-MoE) architecture that incorporates adaptive expert selection mechanisms. \n\nIn the domain of deep learning, the MoE architecture has propelled numerous innovations, especially regarding the expansion of models designed for natural language processing. Initially introduced by Jacobs and colleagues during the 1990s, this approach sought to develop specialized networks that concentrate on distinct portions of the data domain. Fundamental to MoE systems is a gating network, often termed a router, tasked with identifying the most suitable specialist for handling specific instances. Subsequent portions of this discussion outline key strategies for routing within these frameworks: \n\n\u2022 The Switch Transformer [6], introduced by Fedus and collaborators at Google, streamlines the gating mechanism in MoE architectures through assigning individual tokens solely to one specialist for computation. While this configuration substantially decreases data transfer overhead and bolsters the robustness of training procedures, it continues to rely on static selection protocols for experts, without provisions for varying the quantity of active specialists in response to differing levels of input sophistication. \n\n\u2022 Google's GLaM [13] architecture incorporates a mechanism for selecting the top two experts, directing individual tokens to those exhibiting the peak activation levels.",
+    "reference_string": "[281315524 | Li et al. | 2025 | Citations: 0]"
+  },
+  {
+    "externalIds": {
+      "DBLP": "journals/corr/abs-2412-05644",
+      "ArXiv": "2412.05644",
+      "DOI": "10.48550/arXiv.2412.05644",
+      "CorpusId": 274598165
+    },
+    "publicationVenue": {
+      "id": "1901e811-ee72-4b20-8f7e-de08cd395a10",
+      "name": "arXiv.org",
+      "alternate_names": [
+        "ArXiv"
+      ],
+      "issn": "2331-8422",
+      "url": "https://arxiv.org"
+    },
+    "title": "Mixture of Hidden-Dimensions Transformer",
+    "venue": "arXiv.org",
+    "year": 2024,
+    "reference_count": 45,
+    "citation_count": 0,
+    "influential_citation_count": 0,
+    "isOpenAccess": false,
+    "openAccessPdf": {
+      "url": "",
+      "status": null,
+      "license": null,
+      "disclaimer": "Notice: Paper or abstract available at https://arxiv.org/abs/2412.05644, which is subject to the license by the author or copyright owner provided with this content. Please go to the source to verify the license and copyright information for your use."
+    },
+    "s2FieldsOfStudy": [
+      "Computer Science"
+    ],
+    "authors": [
+      {
+        "authorId": "2268796753",
+        "name": "Yilong Chen"
+      },
+      {
+        "authorId": "2257305563",
+        "name": "Junyuan Shang"
+      },
+      {
+        "authorId": "2335037545",
+        "name": "Zhengyu Zhang"
+      },
+      {
+        "authorId": "2054250919",
+        "name": "Jiawei Sheng"
+      },
+      {
+        "authorId": "2268772040",
+        "name": "Tingwen Liu"
+      },
+      {
+        "authorId": "104463827",
+        "name": "Shuohuan Wang"
+      },
+      {
+        "authorId": "2296100360",
+        "name": "Yu Sun"
+      },
+      {
+        "authorId": "2190177674",
+        "name": "Hua Wu"
+      },
+      {
+        "authorId": "2238917361",
+        "name": "Haifeng Wang"
+      }
+    ],
+    "abstract": "Transformer models encounter challenges in scaling hidden dimensions efficiently, as uniformly increasing them inflates computational and memory costs while failing to emphasize the most relevant features for each token. For further understanding, we study hidden dimension sparsity and observe that trained Transformers utilize only a small fraction of token dimensions, revealing an\"activation flow\"pattern. Notably, there are shared sub-dimensions with sustained activation across multiple consecutive tokens and specialized sub-dimensions uniquely activated for each token. To better model token-relevant sub-dimensions, we propose MoHD (Mixture of Hidden Dimensions), a sparse conditional activation architecture. Particularly, MoHD employs shared sub-dimensions for common token features and a routing mechanism to dynamically activate specialized sub-dimensions. To mitigate potential information loss from sparsity, we design activation scaling and group fusion mechanisms to preserve activation flow. In this way, MoHD expands hidden dimensions with negligible increases in computation or parameters, efficient training and inference while maintaining performance. Evaluations across 10 NLP tasks show that MoHD surpasses Vanilla Transformers in parameter efficiency and task performance. It achieves 1.7% higher performance with 50% fewer activation parameters and 3.7% higher performance with a 3x parameter expansion at constant activation cost. MOHD offers a new perspective for scaling the model, showcasing the potential of hidden dimension sparsity to boost efficiency",
+    "corpus_id": 274598165,
+    "sentences": [
+      {
+        "corpus_id": "274598165",
+        "title": "Mixture of Hidden-Dimensions Transformer",
+        "text": "Sparsely-activated Transformer models, such as Sparse Mixture-of-Expert (MoE) architectures, leverage input adaptivity to achieve scalable and efficient computation. These models dynamically activate only a subset of specialized subnetworks, or \"experts,\" for processing each input token, significantly reducing computational overhead (Fedus et al., 2022;Riquelme et al., 2021;Zhou et al., 2022;Jiang et al., 2024a;Xue et al., 2024b). This mechanism enables effective handling of diverse data domains (Li et al., 2022;Jain et al., 2024) while maintaining high performance. Recent advancements in sparsely-activated Transformers have extended their capabilities by introducing heterogeneous experts (Wu et al., 2024;He, 2024), allowing networks to integrate experts with varying capacities and specializations (Dean, 2021;Zhou et al., 2022;Dai et al., 2024). Some recent studies (Qiu et al., 2024) have observed the activation patterns in the intermediate dimensions of FFNs and explored sparsely-activated architectures based on these observations. However, no existing Transformer architecture has implemented sparse activation specifically in the hidden dimensions. Inspired by the work of (Qiu et al., 2024;Dai et al., 2024), we conducted an in-depth analysis of the hidden dimensions and designed a novel sparse activation strategy. This innovation opens a new research avenue for sparsely-activated Transformer architectures.",
+        "score": 0.4024982055,
+        "section_title": "Sparsely-activated Transformer",
+        "char_start_offset": 41078,
+        "sentence_offsets": [
+          {
+            "start": 0,
+            "end": 165,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 575.4,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 587.4,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 235.7
+              },
+              {
+                "page": 13,
+                "top": 599.3,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 206.8
+              }
+            ]
+          },
+          {
+            "start": 166,
+            "end": 434,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 611.3,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 623.2,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 235.2
+              },
+              {
+                "page": 13,
+                "top": 635.2,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 235.2
+              },
+              {
+                "page": 13,
+                "top": 647.2,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 235.2
+              },
+              {
+                "page": 13,
+                "top": 659.1,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 111.0
+              },
+              {
+                "page": 13,
+                "top": 599.3,
+                "left": 265.4,
+                "h": 8.6,
+                "w": 24.0
+              }
+            ]
+          },
+          {
+            "start": 435,
+            "end": 572,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 683.0,
+                "left": 55.2,
+                "h": 8.6,
+                "w": 218.2
+              },
+              {
+                "page": 13,
+                "top": 671.1,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 234.8
+              },
+              {
+                "page": 13,
+                "top": 659.1,
+                "left": 173.5,
+                "h": 8.6,
+                "w": 117.6
+              }
+            ]
+          },
+          {
+            "start": 573,
+            "end": 857,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 695.0,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 706.9,
+                "left": 55.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 683.0,
+                "left": 276.6,
+                "h": 8.6,
+                "w": 14.5
+              },
+              {
+                "page": 13,
+                "top": 94.4,
+                "left": 307.1,
+                "h": 8.6,
+                "w": 205.6
+              },
+              {
+                "page": 13,
+                "top": 70.5,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 82.5,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 234.0
+              }
+            ]
+          },
+          {
+            "start": 858,
+            "end": 1048,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 106.4,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 235.6
+              },
+              {
+                "page": 13,
+                "top": 118.4,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 130.3,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 235.6
+              },
+              {
+                "page": 13,
+                "top": 142.3,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 43.2
+              },
+              {
+                "page": 13,
+                "top": 94.4,
+                "left": 518.3,
+                "h": 8.6,
+                "w": 23.1
+              }
+            ]
+          },
+          {
+            "start": 1049,
+            "end": 1167,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 154.2,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 235.6
+              },
+              {
+                "page": 13,
+                "top": 166.2,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 65.8
+              },
+              {
+                "page": 13,
+                "top": 142.3,
+                "left": 353.7,
+                "h": 8.6,
+                "w": 187.8
+              }
+            ]
+          },
+          {
+            "start": 1168,
+            "end": 1336,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 178.1,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 190.1,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 234.0
+              },
+              {
+                "page": 13,
+                "top": 202.0,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 33.8
+              },
+              {
+                "page": 13,
+                "top": 166.2,
+                "left": 376.3,
+                "h": 8.6,
+                "w": 166.0
+              }
+            ]
+          },
+          {
+            "start": 1337,
+            "end": 1430,
+            "boundingBoxes": [
+              {
+                "page": 13,
+                "top": 214.0,
+                "left": 307.4,
+                "h": 8.6,
+                "w": 179.2
+              },
+              {
+                "page": 13,
+                "top": 202.0,
+                "left": 344.4,
+                "h": 8.6,
+                "w": 197.2
+              }
+            ]
+          }
+        ],
+        "ref_mentions": [
+          {
+            "start": 335,
+            "end": 355,
+            "matchedPaperCorpusId": "231573431"
+          },
+          {
+            "start": 355,
+            "end": 377,
+            "matchedPaperCorpusId": "235417196"
+          },
+          {
+            "start": 377,
+            "end": 395,
+            "matchedPaperCorpusId": "247011948"
+          },
+          {
+            "start": 821,
+            "end": 839,
+            "matchedPaperCorpusId": "247011948"
+          },
+          {
+            "start": 878,
+            "end": 896,
+            "matchedPaperCorpusId": "264172340"
+          },
+          {
+            "start": 1192,
+            "end": 1210,
+            "matchedPaperCorpusId": "264172340"
+          }
+        ],
+        "pdf_hash": "ffa934505c165a0f6ba5726aa5995f8276f78140",
+        "stype": "vespa",
+        "rerank_score": 0.9721679688
+      }
+    ],
+    "relevance_judgement": 0.9721679688,
+    "relevance_judgment_input_expanded": "# Title: Mixture of Hidden-Dimensions Transformer\n# Venue: arXiv.org\n# Authors: Yilong Chen, Junyuan Shang, Zhengyu Zhang, Jiawei Sheng, Tingwen Liu, Shuohuan Wang, Yu Sun, Hua Wu, Haifeng Wang\n## Abstract\nTransformer models encounter challenges in scaling hidden dimensions efficiently, as uniformly increasing them inflates computational and memory costs while failing to emphasize the most relevant features for each token. For further understanding, we study hidden dimension sparsity and observe that trained Transformers utilize only a small fraction of token dimensions, revealing an\"activation flow\"pattern. Notably, there are shared sub-dimensions with sustained activation across multiple consecutive tokens and specialized sub-dimensions uniquely activated for each token. To better model token-relevant sub-dimensions, we propose MoHD (Mixture of Hidden Dimensions), a sparse conditional activation architecture. Particularly, MoHD employs shared sub-dimensions for common token features and a routing mechanism to dynamically activate specialized sub-dimensions. To mitigate potential information loss from sparsity, we design activation scaling and group fusion mechanisms to preserve activation flow. In this way, MoHD expands hidden dimensions with negligible increases in computation or parameters, efficient training and inference while maintaining performance. Evaluations across 10 NLP tasks show that MoHD surpasses Vanilla Transformers in parameter efficiency and task performance. It achieves 1.7% higher performance with 50% fewer activation parameters and 3.7% higher performance with a 3x parameter expansion at constant activation cost. MOHD offers a new perspective for scaling the model, showcasing the potential of hidden dimension sparsity to boost efficiency\n## Sparsely-activated Transformer\nSparsely-activated Transformer models, such as Sparse Mixture-of-Expert (MoE) architectures, leverage input adaptivity to achieve scalable and efficient computation. These models dynamically activate only a subset of specialized subnetworks, or \"experts,\" for processing each input token, significantly reducing computational overhead (Fedus et al., 2022;Riquelme et al., 2021;Zhou et al., 2022;Jiang et al., 2024a;Xue et al., 2024b). This mechanism enables effective handling of diverse data domains (Li et al., 2022;Jain et al., 2024) while maintaining high performance. Recent advancements in sparsely-activated Transformers have extended their capabilities by introducing heterogeneous experts (Wu et al., 2024;He, 2024), allowing networks to integrate experts with varying capacities and specializations (Dean, 2021;Zhou et al., 2022;Dai et al., 2024). Some recent studies (Qiu et al., 2024) have observed the activation patterns in the intermediate dimensions of FFNs and explored sparsely-activated architectures based on these observations. However, no existing Transformer architecture has implemented sparse activation specifically in the hidden dimensions. Inspired by the work of (Qiu et al., 2024;Dai et al., 2024), we conducted an in-depth analysis of the hidden dimensions and designed a novel sparse activation strategy. This innovation opens a new research avenue for sparsely-activated Transformer architectures.",
+    "reference_string": "[274598165 | Chen et al. | 2024 | Citations: 0]"
+  }
+]

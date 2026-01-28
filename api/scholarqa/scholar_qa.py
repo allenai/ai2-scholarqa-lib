@@ -12,10 +12,10 @@ from langsmith import traceable
 from difflib import SequenceMatcher
 
 from scholarqa.config.config_setup import LogsConfig
-from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT
+from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT, STATUS_SYNTHESIS
 from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
-from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, CitationSrc
+from scholarqa.models import GeneratedSection, GeneratedReportData, TaskResult, ToolRequest, CitationSrc
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.preprocess.query_preprocessor import validate, decompose_query, LLMProcessedQuery
 from scholarqa.rag.multi_step_qa_pipeline import MultiStepQAPipeline
@@ -194,7 +194,6 @@ class ScholarQA:
     def step_clustering(self, query: str, per_paper_summaries: Dict[str, str], cost_args: CostReportingArgs = None,
                         sys_prompt: str = SYSTEM_PROMPT_QUOTE_CLUSTER) -> CostAwareLLMResult:
         logger.info("Running Step 2: Clustering the extracted quotes into meaningful dimensions")
-        self.update_task_state("Synthesizing an answer outline based on extracted quotes", step_estimated_time=15)
         start = time()
         cost_args = cost_args._replace(model=self.multi_step_pipeline.llm_model)._replace(
             description="Corpus QA Step 2: Clustering quotes into dimensions")
@@ -516,74 +515,29 @@ class ScholarQA:
     def get_user_msg_id(self):
         return self.tool_request.user_id, self.task_id
 
-    @traceable(run_type="tool", name="ai2_scholar_qa_trace")
-    def run_qa_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+    def generate_report(
+        self,
+        query: str,
+        reranked_df: pd.DataFrame,
+        paper_metadata: Dict[str, Any],
+        cost_args: CostReportingArgs,
+        event_trace: EventTrace,
+        user_id: str,
+        inline_tags: bool = False
+    ) -> GeneratedReportData:
         """
-                This function takes a query and returns a response.
-                Goes through the following steps:
-                0) Decompose the query to get filters like year, venue, fos, citations, etc along with a re-written
-                version of the query and a query suitable for keyword search.
-                1) Query retrieval to get the relevant snippets from the index (n_retrieval)
-                1.1) Query semantic scholar with the keyword search query to get the relevant papers.(n_keyword_srch)
-                2) Re-rank the snippets based on the query with a cross encoder (n_rerank)
-                3) Get exact relevant quotes from an LLM
-                4) Generate outline and cluster the quotes from (3)
-                4.1) The quotes cluster in the outline have inline citations associated with them. Map the quotes to
-                their inline citations and include them with the quotes.
-                5) Generate the summarized output using the quotes and outline in (3) and (4)
+        Generate report from retrieved papers using quote extraction, clustering,
+        and iterative summary. Override in subclasses for alternative approaches.
 
-                :param req: A scientific query posed to scholar qa by a user, consists of the string query, task id and user id
-                :param inline_tags: Whether to include inline <paper> tags in the output or not
-                :return: A response to the query
-
+        :param query: The user's search query
+        :param reranked_df: DataFrame of reranked paper snippets
+        :param paper_metadata: Metadata for the papers
+        :param cost_args: Cost tracking arguments
+        :param event_trace: Event tracing object
+        :param user_id: User identifier
+        :param inline_tags: Whether to include inline <paper> tags in the output
+        :return: GeneratedReportData containing intermediate results for finalization
         """
-        self.tool_request = req
-        self.update_task_state("Processing user query", task_estimated_time="~3 minutes", step_estimated_time=5)
-        task_id = self.task_id if self.task_id else req.task_id
-        user_id, msg_id = self.get_user_msg_id()
-        msg_id = task_id if not msg_id else msg_id
-        query = req.query
-        logger.info(
-            f"Received query: {query} from user_id: {user_id} with opt_in: {req.opt_in}"
-        )
-        event_trace = EventTrace(
-            task_id,
-            self.paper_finder.retriever.n_retrieval if hasattr(self.paper_finder.retriever, "n_retrieval") else 0,
-            # noqa
-            self.paper_finder.n_rerank,
-            req,
-            user_id=user_id
-        )
-        cost_args = CostReportingArgs(
-            task_id=task_id,
-            user_id=user_id,
-            description="Step 0: Query decomposition",
-            model=self.llm_model,
-            msg_id=msg_id
-        )
-        llm_processed_query = self.preprocess_query(query, cost_args)
-        event_trace.trace_decomposition_event(llm_processed_query)
-
-        # Paper finder step - retrieve relevant paper passages from semantic scholar index and api
-        snippet_srch_res, s2_srch_res = self.find_relevant_papers(llm_processed_query.result)
-        retrieved_candidates = snippet_srch_res + s2_srch_res
-        if not retrieved_candidates:
-            raise Exception(
-                f"There is no relevant information in the retrieved snippets for query: {query}.")
-        event_trace.trace_retrieval_event(retrieved_candidates)
-
-        # Rerank the retrieved candidates based on the query with a cross encoder
-        s2_srch_metadata = [{k: v for k, v in paper.items() if
-                             k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS} for paper in
-                            retrieved_candidates if "s2FieldsOfStudy" in paper]
-        reranked_df, paper_metadata = self.rerank_and_aggregate(query, retrieved_candidates,
-                                                                {str(paper["corpus_id"]): paper for paper in
-                                                                 s2_srch_metadata})
-        if reranked_df.empty:
-            raise Exception(
-                "No relevant papers found for the query post reranking, skipping quote extraction.")
-        event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
-
         # Step 1 - quote extraction
         per_paper_summaries = self.step_select_quotes(query, reranked_df, cost_args)
         if not per_paper_summaries.result:
@@ -670,8 +624,103 @@ class ScholarQA:
                     tables_val = tables[sidx]
             json_summary[sidx]["table"] = tables_val.to_dict() if tables_val else None
             generated_sections[sidx].table = tables_val if tables_val else None
-        self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
-        event_trace.trace_summary_event(json_summary, all_sections, tcosts)
+
+        return GeneratedReportData(
+            report_title=self.report_title,
+            sections=generated_sections,
+            json_summary=json_summary,
+            cost_result=all_sections,
+            tcosts=tcosts,
+            quotes_metadata=quotes_metadata
+        )
+
+    @traceable(run_type="tool", name="ai2_scholar_qa_trace")
+    def run_qa_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+        """
+                This function takes a query and returns a response.
+                Goes through the following steps:
+                0) Decompose the query to get filters like year, venue, fos, citations, etc along with a re-written
+                version of the query and a query suitable for keyword search.
+                1) Query retrieval to get the relevant snippets from the index (n_retrieval)
+                1.1) Query semantic scholar with the keyword search query to get the relevant papers.(n_keyword_srch)
+                2) Re-rank the snippets based on the query with a cross encoder (n_rerank)
+                3) Get exact relevant quotes from an LLM
+                4) Generate outline and cluster the quotes from (3)
+                4.1) The quotes cluster in the outline have inline citations associated with them. Map the quotes to
+                their inline citations and include them with the quotes.
+                5) Generate the summarized output using the quotes and outline in (3) and (4)
+
+                :param req: A scientific query posed to scholar qa by a user, consists of the string query, task id and user id
+                :param inline_tags: Whether to include inline <paper> tags in the output or not
+                :return: A response to the query
+
+        """
+        self.tool_request = req
+        self.update_task_state("Processing user query", task_estimated_time="~3 minutes", step_estimated_time=5)
+        task_id = self.task_id if self.task_id else req.task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
+        query = req.query
+        logger.info(
+            f"Received query: {query} from user_id: {user_id} with opt_in: {req.opt_in}"
+        )
+        event_trace = EventTrace(
+            task_id,
+            self.paper_finder.retriever.n_retrieval if hasattr(self.paper_finder.retriever, "n_retrieval") else 0,
+            # noqa
+            self.paper_finder.n_rerank,
+            req,
+            user_id=user_id
+        )
+        cost_args = CostReportingArgs(
+            task_id=task_id,
+            user_id=user_id,
+            description="Step 0: Query decomposition",
+            model=self.llm_model,
+            msg_id=msg_id
+        )
+        llm_processed_query = self.preprocess_query(query, cost_args)
+        event_trace.trace_decomposition_event(llm_processed_query)
+
+        # Paper finder step - retrieve relevant paper passages from semantic scholar index and api
+        snippet_srch_res, s2_srch_res = self.find_relevant_papers(llm_processed_query.result)
+        retrieved_candidates = snippet_srch_res + s2_srch_res
+        if not retrieved_candidates:
+            raise Exception(
+                f"There is no relevant information in the retrieved snippets for query: {query}.")
+        event_trace.trace_retrieval_event(retrieved_candidates)
+
+        # Rerank the retrieved candidates based on the query with a cross encoder
+        s2_srch_metadata = [{k: v for k, v in paper.items() if
+                             k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS} for paper in
+                            retrieved_candidates if "s2FieldsOfStudy" in paper]
+        reranked_df, paper_metadata = self.rerank_and_aggregate(query, retrieved_candidates,
+                                                                {str(paper["corpus_id"]): paper for paper in
+                                                                 s2_srch_metadata})
+        if reranked_df.empty:
+            raise Exception(
+                "No relevant papers found for the query post reranking, skipping quote extraction.")
+        event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
+
+        self.update_task_state(STATUS_SYNTHESIS)
+        report_data = self.generate_report(
+            query=query,
+            reranked_df=reranked_df,
+            paper_metadata=paper_metadata,
+            cost_args=cost_args,
+            event_trace=event_trace,
+            user_id=user_id,
+            inline_tags=inline_tags
+        )
+
+        # Finalization: postprocess, trace, and persist
+        self.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
+        event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
         event_trace.persist_trace(self.logs_config)
-        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost,
-                          tokens=event_trace.tokens)
+
+        return TaskResult(
+            report_title=report_data.report_title,
+            sections=report_data.sections,
+            cost=event_trace.total_cost,
+            tokens=event_trace.tokens
+        )
