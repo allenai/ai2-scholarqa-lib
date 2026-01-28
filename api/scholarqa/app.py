@@ -23,7 +23,6 @@ from scholarqa.rag.reranker.reranker_base import RERANKER_MAPPING
 from scholarqa.rag.retrieval import PaperFinderWithReranker, PaperFinder
 from scholarqa.rag.retriever_base import FullTextRetriever
 from scholarqa.scholar_qa import ScholarQA
-from scholarqa.lite import ScholarQALite
 from scholarqa.state_mgmt.local_state_mgr import LocalStateMgrClient
 from typing import Type, TypeVar
 
@@ -81,7 +80,7 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
-    scholar_qa = app_config.load_scholarqa(task_id, tool_request, sqa_class=ScholarQALite)
+    scholar_qa = app_config.load_scholarqa(task_id, tool_request, sqa_class=ScholarQA)
     return scholar_qa.run_qa_pipeline(tool_request)
 
 
