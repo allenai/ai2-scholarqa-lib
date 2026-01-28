@@ -7,7 +7,20 @@ from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 from anyascii import anyascii
-from scholarqa.llms.prompts import UNIFIED_GENERATION_PROMPT
+from scholarqa.llms.prompts import UNIFIED_GENERATION_PROMPT, REPORT_TITLE_DIRECTIVE
+
+
+# Title generation prompt for lite pipeline (uses same directive as clustering step)
+TITLE_GENERATION_PROMPT = f"""Generate a concise report title based on the user query and section titles provided.
+
+{REPORT_TITLE_DIRECTIVE}
+
+User query: {{query}}
+
+Section titles:
+{{section_titles}}
+
+Output ONLY the title text, nothing else."""
 
 
 def normalize_snippet_quote(text: str) -> str:
@@ -88,3 +101,9 @@ def build_prompt(query: str, section_references: Dict[str, str]) -> str:
     """Build the prompt in the format expected by the lite generation model."""
     refs_json = json.dumps(section_references, indent=2)
     return UNIFIED_GENERATION_PROMPT.format(query=query, refs_json=refs_json)
+
+
+def build_title_prompt(query: str, section_titles: List[str]) -> str:
+    """Build the prompt for title generation from query and section titles."""
+    titles_str = "\n".join(f"- {title}" for title in section_titles)
+    return TITLE_GENERATION_PROMPT.format(query=query, section_titles=titles_str)

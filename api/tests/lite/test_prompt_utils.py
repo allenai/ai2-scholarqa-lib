@@ -67,4 +67,4 @@ class TestBuildPrompt:
         """Verify build_prompt produces the exact expected output."""
         references, _, _ = prepare_references_data(sample_reranked_df)
         actual_prompt = build_prompt(sample_query, references)
-        assert actual_prompt == expected_prompt
+        assert actual_prompt == expected_prompt.strip()

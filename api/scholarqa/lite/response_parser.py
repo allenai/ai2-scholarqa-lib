@@ -24,6 +24,11 @@ def _strip_think_block(response: str) -> str:
     return re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
 
 
+def parse_title(response: str) -> str:
+    """Parse title from model response, stripping think blocks."""
+    return _strip_think_block(response)
+
+
 def _extract_sections_raw(response: str) -> List[str]:
     """Split response into raw section strings on SECTION; markers."""
     # Example input: "SECTION; Intro\nTLDR; ...\nBody...\nSECTION; Methods\n..."
@@ -43,8 +48,12 @@ def _extract_sections_raw(response: str) -> List[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _convert_section_format(raw_section: str) -> str:
-    """Normalize section to format: Title, TLDR line, body text."""
+def _convert_section_format(raw_section: str) -> Tuple[str, str]:
+    """Normalize section to format: Title, TLDR line, body text.
+
+    Returns:
+        Tuple of (title, formatted_section_text)
+    """
     # Example input: "Introduction to Transformers\nTLDR; Overview of attention.\nTransformers use..."
 
     # Split into title and everything else
@@ -59,15 +68,22 @@ def _convert_section_format(raw_section: str) -> str:
     tldr_line = remaining_lines[0]  # "TLDR; Overview of attention."
     body = remaining_lines[1].strip() if len(remaining_lines) > 1 else ""
 
-    # Return normalized format: "Title\nTLDR line\nBody"
-    return f"{title}\n{tldr_line}\n{body}"
+    # Return title and normalized format: "Title\nTLDR line\nBody"
+    return title, f"{title}\n{tldr_line}\n{body}"
 
 
-def parse_sections(response: str) -> List[str]:
-    """Parse response into section strings."""
+def parse_sections(response: str) -> Tuple[List[str], List[str]]:
+    """Parse response into section strings and titles.
+
+    Returns:
+        Tuple of (section_texts, section_titles)
+    """
     cleaned = _strip_think_block(response)
     raw_sections = _extract_sections_raw(cleaned)
-    return [_convert_section_format(s) for s in raw_sections]
+    results = [_convert_section_format(s) for s in raw_sections]
+    titles = [r[0] for r in results]
+    texts = [r[1] for r in results]
+    return texts, titles
 
 
 def build_per_paper_summaries(

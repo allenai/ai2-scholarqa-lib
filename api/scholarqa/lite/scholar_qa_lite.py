@@ -1,14 +1,17 @@
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+from langsmith import traceable
 
 from scholarqa.llms.litellm_helper import llm_completion, CostAwareLLMResult, TokenUsage, register_model
 from scholarqa.models import GeneratedReportData
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.scholar_qa import ScholarQA
-from scholarqa.lite.prompt_utils import prepare_references_data, build_prompt
+from scholarqa.lite.prompt_utils import prepare_references_data, build_prompt, build_title_prompt
 from scholarqa.lite.response_parser import (
     parse_sections,
+    parse_title,
     build_per_paper_summaries,
 )
 
@@ -28,6 +31,19 @@ class ScholarQALite(ScholarQA):
             )
         self.report_generation_args = report_generation_args
 
+    @traceable(name="Generation: Generate report title from query and sections")
+    def step_generate_title(self, query: str, section_titles: List[str], model: str, llm_kwargs: dict) -> str:
+        """Generate a report title from query and section titles. Returns empty string on failure."""
+        if not section_titles:
+            return ""
+        try:
+            prompt = build_title_prompt(query, section_titles)
+            result = llm_completion(user_prompt=prompt, model=model, fallback=None, **llm_kwargs)
+            return parse_title(result.content)
+        except Exception as e:
+            logger.warning(f"Failed to generate report title: {e}")
+            return ""
+
     def generate_report(self, query, reranked_df, paper_metadata, cost_args,
                         event_trace, user_id, inline_tags=False) -> GeneratedReportData:
         section_references, per_paper_data, all_quotes_metadata = prepare_references_data(reranked_df)
@@ -43,8 +59,11 @@ class ScholarQALite(ScholarQA):
         completion_result = llm_completion(user_prompt=prompt, model=model, fallback=None, **llm_kwargs)
         response = completion_result.content
 
-        section_texts = parse_sections(response)
+        section_texts, section_titles = parse_sections(response)
         logger.info(f"Parsed {len(section_texts)} sections from response")
+
+        # Generate report title from query and section titles
+        report_title = self.step_generate_title(query, section_titles, model, llm_kwargs)
 
         per_paper_summaries_extd, quotes_metadata = build_per_paper_summaries(
             section_texts, per_paper_data, all_quotes_metadata
@@ -70,7 +89,7 @@ class ScholarQALite(ScholarQA):
         )
 
         return GeneratedReportData(
-            report_title="",
+            report_title=report_title,
             sections=generated_sections,
             json_summary=json_summary,
             cost_result=cost_result,

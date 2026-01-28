@@ -27,11 +27,12 @@ def sample_reranked_df():
 class TestParseSections:
 
     def test_section_count(self, sample_response):
-        sections = parse_sections(sample_response)
+        sections, titles = parse_sections(sample_response)
         assert len(sections) == 6
+        assert len(titles) == 6
 
     def test_section_titles(self, sample_response):
-        sections = parse_sections(sample_response)
+        _, titles = parse_sections(sample_response)
         expected_titles = [
             "Architectural innovations and theoretical insights",
             "Vision-specific advances",
@@ -40,14 +41,13 @@ class TestParseSections:
             "Hardware acceleration and efficiency",
             "Theoretical foundations and future directions",
         ]
-        actual_titles = [s.split('\n')[0] for s in sections]
-        assert actual_titles == expected_titles
+        assert titles == expected_titles
 
 
 class TestBuildPerPaperSummaries:
 
     def test_extracts_citations(self, sample_response, sample_reranked_df):
-        sections = parse_sections(sample_response)
+        sections, _ = parse_sections(sample_response)
         # Get pre-computed data from prepare_references_data
         _, per_paper_data, all_quotes_metadata = prepare_references_data(sample_reranked_df)
         per_paper_summaries, quotes_metadata = build_per_paper_summaries(
