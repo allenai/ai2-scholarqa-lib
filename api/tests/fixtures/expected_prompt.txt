@@ -1,0 +1,53 @@
+A user issued a query and a set of research papers were provided with salient content.
+The user query was: What are the latest advances in transformer architectures?
+
+I will provide you with a list of chosen quotes from these papers that are relevant to the user query.
+Your job is to help me write this a multi-section answer to the query and cite the provided quoted references.
+
+Here are the relevant reference quotes to cite:
+<section_references>
+{
+  "[252788259 | Chitty-Venkata et al. | 2022 | Citations: 93]": "Transformer network design is a challenging problem with important applications in several tasks and hardware platforms. In the last few years, Neural Architecture Search and Hardware-aware NAS methods have significantly contributed to the automatic design of efficient Transformer, BERT, and Vision Transformer models. The automatically searched Transformers outperformed many manually designed Transformer architectures in terms of model and hardware performance. In this survey paper, we extensively reviewed recent advances related to NAS algorithms specific to Transformer and its family of architectures. We mainly summarized the search space, search strategy, and performance of the searched Transformer of state-of-the-art NAS methods. A diverse set of methods have developed over the last two years with innovations in architecture design and learning methodologies, which are analyzed in different sections. Although the performance of NAS algorithms has been greatly enhanced, the SOTA methods still have limitations, some of which are outlined in this paper. We hope our effort helps the reader understand the latest in Transformer NAS and ignites interest in developing novel and efficient methods.",
+  "[281315524 | Li et al. | 2025 | Citations: 0]": "The advent of self-attention mechanisms has enabled Transformer architectures to fundamentally transform how sequence data is processed, spurring extensive research into improving their computational efficiency, scalability, and versatility for diverse practical applications. Research efforts to optimize Transformer designs can be organized into three primary categories. \n\nThe first research direction addresses the computational burden inherent in attention mechanisms, specifically targeting the quadratic scaling complexity that increases with input sequence length. Representative approaches include Linformer, Reformer, and Performer, which modify attention computation strategies to achieve reduced computational overhead while preserving the fundamental advantages of self-attention architectures.The second research stream concentrates on parameter reduction strategies that maintain model performance while decreasing memory requirements. ALBERT exemplifies this approach by implementing cross-layer parameter sharing techniques, achieving significant model compression without sacrificing predictive accuracy.The third research category encompasses MoE methodologies, which have demonstrated remarkable success in scaling Transformer models to trillion-parameter sizes while avoiding proportional computational cost increases. These techniques enable efficient model scaling through selective expert activation. This research advances the third category by introducing a novel Dynamic Adaptive Shared Expert and Grouped Multi-Head Attention Hybrid Model (DASG-MoE) architecture that incorporates adaptive expert selection mechanisms. \n\nIn the domain of deep learning, the MoE architecture has propelled numerous innovations, especially regarding the expansion of models designed for natural language processing. Initially introduced by Jacobs and colleagues during the 1990s, this approach sought to develop specialized networks that concentrate on distinct portions of the data domain. Fundamental to MoE systems is a gating network, often termed a router, tasked with identifying the most suitable specialist for handling specific instances. Subsequent portions of this discussion outline key strategies for routing within these frameworks: \n\n\u2022 The Switch Transformer [6], introduced by Fedus and collaborators at Google, streamlines the gating mechanism in MoE architectures through assigning individual tokens solely to one specialist for computation. While this configuration substantially decreases data transfer overhead and bolsters the robustness of training procedures, it continues to rely on static selection protocols for experts, without provisions for varying the quantity of active specialists in response to differing levels of input sophistication. \n\n\u2022 Google's GLaM [13] architecture incorporates a mechanism for selecting the top two experts, directing individual tokens to those exhibiting the peak activation levels.",
+  "[274598165 | Chen et al. | 2024 | Citations: 0]": "Sparsely-activated Transformer models, such as Sparse Mixture-of-Expert (MoE) architectures, leverage input adaptivity to achieve scalable and efficient computation. These models dynamically activate only a subset of specialized subnetworks, or \"experts,\" for processing each input token, significantly reducing computational overhead (Fedus et al., 2022;Riquelme et al., 2021;Zhou et al., 2022;Jiang et al., 2024a;Xue et al., 2024b). This mechanism enables effective handling of diverse data domains (Li et al., 2022;Jain et al., 2024) while maintaining high performance. Recent advancements in sparsely-activated Transformers have extended their capabilities by introducing heterogeneous experts (Wu et al., 2024;He, 2024), allowing networks to integrate experts with varying capacities and specializations (Dean, 2021;Zhou et al., 2022;Dai et al., 2024). Some recent studies (Qiu et al., 2024) have observed the activation patterns in the intermediate dimensions of FFNs and explored sparsely-activated architectures based on these observations. However, no existing Transformer architecture has implemented sparse activation specifically in the hidden dimensions. Inspired by the work of (Qiu et al., 2024;Dai et al., 2024), we conducted an in-depth analysis of the hidden dimensions and designed a novel sparse activation strategy. This innovation opens a new research avenue for sparsely-activated Transformer architectures."
+}
+</section_references>
+
+<citation instructions>
+- Each reference is a key value pair, where the key is a pipe separated string enclosed in square brackets representing [ID | AUTHOR_REF | YEAR | Citations: CITES].
+
+The value consists of quotes from the reference, eg. "[2345677 | Doe, Moe et al. | 2024 | Citations: 25]": "This is the reference text."
+
+- Please write the answer, making sure to cite the relevant references inline using the corresponding reference key in the format: [ID | AUTHOR_REF | YEAR | Citations: CITES]. You may use more than one reference key in a row if it's appropriate. In general, use all of the references that support your written text.
+
+- You can add something from your own knowledge. This should only be done if you are sure about its truth and/or if there is not enough information in the references to answer the user's question. Cite the text from your knowledge as (LLM Memory). The citation should follow AFTER the text. Don't cite LLM Memory with another evidence source.
+
+- Note that all citations that support what you write must come after the text you write. That's how humans read in-line cited text. First text, then the citation.
+</citation instructions>
+
+<writing instructions>
+The answer should have multiple sections. Each section should have the following characteristics:
+- Before the section write a 2 sentence "TLDR;" of the section. No citations here. Precede with the text "TLDR;"
+- Use direct and simple language everywhere, like "use" and "can". Avoid using more complex words if simple ones will do.
+- Use the citation count to decide what is "notable" or "important". If the citation count is 100 or more, you are allowed to use value judgments like "notable."
+- Some references are older. Something that claims to be "state of the art" but is from 2020 may not be any more. Please avoid making such claims. Note that the current year is 2025.
+- Be concise.
+- The answer should directly respond to the user query.
+- Multiple references may express the same idea. If so, you can cite multiple references in a single sentence.
+- Do not make the same points across multiple sections.
+</writing instructions>
+
+<format and structure instructions>
+Start each section with a 'SECTION;' marker followed by its section_name and then a newline and then the text "TLDR;", the actual TLDR, and then write the summary.
+
+Example format:
+SECTION; Introduction to Text Classification
+TLDR; Overview of the text classification problem and its applications.
+Text classification is a fundamental NLP task...
+
+Rules for section formatting:
+- If the section would be more readable as a list (e.g.,"Important Papers"), then format the section as a LIST (required).
+- Otherwise write one or more SYNTHESIS paragraphs for each section (required).
+- Use section names to judge what section format would be best. Lists and synthesis paragraphs are the only allowed formats.
+- Write the section content using markdown format.
+</format and structure instructions>

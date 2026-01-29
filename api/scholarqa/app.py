@@ -49,8 +49,10 @@ def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Typ
     else:
         paper_finder = PaperFinder(retriever, **run_config.paper_finder_args)
 
+    init_kwargs = {**run_config.pipeline_args, **sqa_args}
+
     return sqa_class(paper_finder=paper_finder, task_id=task_id, state_mgr=app_config.state_mgr_client,
-                     logs_config=logs_config, **run_config.pipeline_args, **sqa_args)
+                     logs_config=logs_config, **init_kwargs)
 
 
 # setup logging config and local litellm cache

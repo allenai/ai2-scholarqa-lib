@@ -46,6 +46,7 @@ class RunConfig(BaseModel):
     reranker_args: dict = Field(default=None, description="Arguments for the reranker service")
     paper_finder_args: dict = Field(default=None, description="Arguments for the paper finder service")
     pipeline_args: dict = Field(default=None, description="Arguments for the Scholar QA pipeline service")
+    lite_pipeline_args: dict = Field(default=None, description="Arguments for ScholarQALite pipeline")
     extras: dict = Field(default=None, description="Extra arguments for the run config")
 
 
