@@ -12,7 +12,7 @@ from scholarqa.lite.prompt_utils import prepare_references_data, build_prompt, b
 from scholarqa.lite.response_parser import (
     parse_sections,
     parse_title,
-    build_per_paper_summaries,
+    filter_per_paper_summaries,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,13 +37,11 @@ class ScholarQALite(ScholarQA):
     ScholarQA using one-shot generation instead of quote extraction + clustering.
     """
 
-    def __init__(self, *args, report_generation_args: Dict[str, Any] = None, **kwargs):
+    def __init__(self, *args, lite_pipeline_args: dict = None, **kwargs):
         super().__init__(*args, **kwargs)
-        if not report_generation_args or "model" not in report_generation_args:
-            raise ValueError(
-                "ScholarQALite requires 'report_generation_args' with at least a 'model' key."
-            )
-        self.report_generation_args = report_generation_args
+        if not lite_pipeline_args or "model" not in lite_pipeline_args:
+            raise ValueError("ScholarQALite requires 'model' in lite_pipeline_args")
+        self.lite_pipeline_args = lite_pipeline_args
 
     def generate_report(self, query, reranked_df, paper_metadata, cost_args,
                         event_trace, user_id, inline_tags=False) -> GeneratedReportData:
@@ -51,11 +49,9 @@ class ScholarQALite(ScholarQA):
         prompt = build_prompt(query, section_references)
         logger.info(f"Built lite generation prompt with {len(section_references)} references")
 
-        model = self.report_generation_args["model"]
-        llm_kwargs = {k: v for k, v in self.report_generation_args.items() if k != "model"}
-        if "api_key" not in llm_kwargs:
-            llm_kwargs["api_key"] = os.environ.get("REPORT_GENERATION_API_KEY")
-        register_model(model, llm_kwargs)
+        llm_kwargs = {**self.lite_pipeline_args, "api_key": os.environ.get("REPORT_GENERATION_API_KEY")}
+        register_model(llm_kwargs)
+        model = llm_kwargs.pop("model")
 
         completion_result = llm_completion(user_prompt=prompt, model=model, fallback=None, **llm_kwargs)
         response = completion_result.content
@@ -63,9 +59,9 @@ class ScholarQALite(ScholarQA):
         section_texts, section_titles = parse_sections(response)
         logger.info(f"Parsed {len(section_texts)} sections from response")
 
-        report_title = _generate_title(query, section_titles, model, llm_kwargs)
+        self.report_title = _generate_title(query, section_titles, model, llm_kwargs)
 
-        per_paper_summaries_extd, quotes_metadata = build_per_paper_summaries(
+        per_paper_summaries_extd, quotes_metadata = filter_per_paper_summaries(
             section_texts, per_paper_data, all_quotes_metadata
         )
 
@@ -89,7 +85,7 @@ class ScholarQALite(ScholarQA):
         )
 
         return GeneratedReportData(
-            report_title=report_title,
+            report_title=self.report_title,
             sections=generated_sections,
             json_summary=json_summary,
             cost_result=cost_result,

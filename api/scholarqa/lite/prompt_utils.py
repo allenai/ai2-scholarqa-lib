@@ -76,15 +76,16 @@ def prepare_references_data(
         else:
             # Fall back to abstract if no sentences (e.g., abstract-only retrieval)
             text = row.get("abstract", "")
-            combined_quote = text
             snippet_metadata = []
             if text:
-                quote = normalize_snippet_quote(text)
+                combined_quote = normalize_snippet_quote(text)
                 snippet_metadata.append({
-                    "quote": quote,
+                    "quote": combined_quote,
                     "section_title": "abstract",
                     "pdf_hash": "",
                 })
+            else:
+                combined_quote = ""
 
         if text:
             references[ref_str] = text

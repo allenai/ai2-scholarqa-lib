@@ -4,7 +4,9 @@ import pytest
 
 from scholarqa.lite.response_parser import (
     parse_sections,
-    build_per_paper_summaries,
+    filter_per_paper_summaries,
+    _clean_tldr,
+    _normalize_paragraph_breaks,
 )
 from scholarqa.lite.prompt_utils import prepare_references_data
 
@@ -44,13 +46,52 @@ class TestParseSections:
         assert titles == expected_titles
 
 
-class TestBuildPerPaperSummaries:
+class TestCleanTldr:
+
+    def test_removes_model_generated(self):
+        assert _clean_tldr("TLDR; Summary. (Model-Generated)") == "TLDR; Summary."
+
+    def test_removes_llm_memory(self):
+        assert _clean_tldr("TLDR; Summary. (LLM Memory)") == "TLDR; Summary."
+
+
+class TestNormalizeParagraphBreaks:
+
+    def test_converts_single_newline_to_double(self):
+        text = "First sentence ends here.\nSecond paragraph starts here."
+        result = _normalize_paragraph_breaks(text)
+        assert result == "First sentence ends here.\n\nSecond paragraph starts here."
+
+    def test_preserves_existing_double_newlines(self):
+        text = "First paragraph.\n\nSecond paragraph."
+        result = _normalize_paragraph_breaks(text)
+        assert result == "First paragraph.\n\nSecond paragraph."
+
+    def test_handles_multiple_paragraphs(self):
+        text = "First paragraph!\nSecond paragraph?\nThird paragraph."
+        result = _normalize_paragraph_breaks(text)
+        assert result == "First paragraph!\n\nSecond paragraph?\n\nThird paragraph."
+
+    def test_preserves_lowercase_continuations(self):
+        text = "This is a sentence\nthat continues on the next line."
+        result = _normalize_paragraph_breaks(text)
+        # Should not add double newline since next line starts with lowercase
+        assert result == "This is a sentence\nthat continues on the next line."
+
+    def test_preserves_list_items(self):
+        text = "Introduction.\n- Item one\n- Item two"
+        result = _normalize_paragraph_breaks(text)
+        # Should not add double newline before list items (they start with -)
+        assert result == "Introduction.\n- Item one\n- Item two"
+
+
+class TestFilterPerPaperSummaries:
 
     def test_extracts_citations(self, sample_response, sample_reranked_df):
         sections, _ = parse_sections(sample_response)
         # Get pre-computed data from prepare_references_data
         _, per_paper_data, all_quotes_metadata = prepare_references_data(sample_reranked_df)
-        per_paper_summaries, quotes_metadata = build_per_paper_summaries(
+        per_paper_summaries, quotes_metadata = filter_per_paper_summaries(
             sections, per_paper_data, all_quotes_metadata
         )
         # Should find citations that match papers in reranked_df

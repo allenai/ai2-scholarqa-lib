@@ -48,6 +48,25 @@ def _extract_sections_raw(response: str) -> List[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _clean_tldr(tldr: str) -> str:
+    """Remove LLM/Model citations from TLDR text."""
+    cleaned = re.sub(r"\s*[\(\[][^)\]]*(?:LLM|Model)[^)\]]*[\)\]]", "", tldr)
+    return cleaned.strip()
+
+
+def _normalize_llm_memory(text: str) -> str:
+    """Convert (LLM Memory) to citation format to match multi-step pipeline."""
+    return re.sub(r"\(LLM Memory\)", "[LLM MEMORY | 2024]", text, flags=re.IGNORECASE)
+
+
+def _normalize_paragraph_breaks(text: str) -> str:
+    """Ensure proper paragraph breaks to match the multi-step pipeline format."""
+    # Pattern: end of sentence (. ! ?) followed by single newline and capital letter
+    # Convert to double newline for markdown paragraph break
+    text = re.sub(r"([.!?])\n([A-Z])", r"\1\n\n\2", text)
+    return text
+
+
 def _convert_section_format(raw_section: str) -> Tuple[str, str]:
     """Normalize section to format: Title, TLDR line, body text.
 
@@ -65,8 +84,10 @@ def _convert_section_format(raw_section: str) -> Tuple[str, str]:
     # Split remaining into TLDR line and body
     # Example: remaining_lines = ["TLDR; Overview of attention.", "Transformers use..."]
     remaining_lines = remaining.split("\n", 1)
-    tldr_line = remaining_lines[0]  # "TLDR; Overview of attention."
+    tldr_line = _clean_tldr(remaining_lines[0])
     body = remaining_lines[1].strip() if len(remaining_lines) > 1 else ""
+    body = _normalize_llm_memory(body)
+    body = _normalize_paragraph_breaks(body)
 
     # Return title and normalized format: "Title\nTLDR line\nBody"
     return title, f"{title}\n{tldr_line}\n{body}"
@@ -86,7 +107,7 @@ def parse_sections(response: str) -> Tuple[List[str], List[str]]:
     return texts, titles
 
 
-def build_per_paper_summaries(
+def filter_per_paper_summaries(
     section_texts: List[str],
     per_paper_data: Dict[str, Dict[str, Any]],
     all_quotes_metadata: Dict[str, List[Dict[str, Any]]],

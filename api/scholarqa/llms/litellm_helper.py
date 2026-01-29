@@ -72,13 +72,16 @@ def setup_llm_cache(cache_type: str = "s3", **cache_args):
     litellm.enable_cache()
 
 
-def register_model(model: str, llm_kwargs: dict = None) -> None:
+def register_model(llm_kwargs: dict) -> None:
     """Register a custom model with litellm if not already known."""
+    model = llm_kwargs.get("model")
+    if not model:
+        return
     try:
         litellm.get_model_info(model)
         return
     except Exception:
-        max_tokens = (llm_kwargs or {}).get("max_tokens", 4096)
+        max_tokens = llm_kwargs.get("max_tokens", 4096)
         logger.info(f"Registering model {model} with litellm (max_tokens={max_tokens})")
         litellm.register_model({
             model: {
