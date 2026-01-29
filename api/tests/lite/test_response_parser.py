@@ -54,6 +54,15 @@ class TestCleanTldr:
     def test_removes_llm_memory(self):
         assert _clean_tldr("TLDR; Summary. (LLM Memory)") == "TLDR; Summary."
 
+    def test_removes_source_count_singular(self):
+        assert _clean_tldr("TLDR; Summary. (1 source)") == "TLDR; Summary."
+
+    def test_removes_source_count_plural(self):
+        assert _clean_tldr("TLDR; Summary. (9 sources)") == "TLDR; Summary."
+
+    def test_removes_source_count_large(self):
+        assert _clean_tldr("TLDR; Summary. (19 sources)") == "TLDR; Summary."
+
 
 class TestNormalizeParagraphBreaks:
 

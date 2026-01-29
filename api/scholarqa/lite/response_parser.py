@@ -49,8 +49,11 @@ def _extract_sections_raw(response: str) -> List[str]:
 
 
 def _clean_tldr(tldr: str) -> str:
-    """Remove LLM/Model citations from TLDR text."""
+    """Remove LLM/Model citations and source counts from TLDR text."""
+    # Remove patterns like (LLM Memory), (Model-Generated), [LLM Memory], etc.
     cleaned = re.sub(r"\s*[\(\[][^)\]]*(?:LLM|Model)[^)\]]*[\)\]]", "", tldr)
+    # Remove patterns like (N sources), (1 source)
+    cleaned = re.sub(r"\s*\(\d+\s+sources?\)", "", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
 
 
@@ -78,7 +81,7 @@ def _convert_section_format(raw_section: str) -> Tuple[str, str]:
     # Split into title and everything else
     # Example: lines = ["Introduction to Transformers", "TLDR; Overview of attention.\nTransformers use..."]
     lines = raw_section.split("\n", 1)
-    title = lines[0].strip()  # "Introduction to Transformers"
+    title = lines[0].strip()
     remaining = lines[1].strip() if len(lines) > 1 else ""
 
     # Split remaining into TLDR line and body
@@ -89,7 +92,6 @@ def _convert_section_format(raw_section: str) -> Tuple[str, str]:
     body = _normalize_llm_memory(body)
     body = _normalize_paragraph_breaks(body)
 
-    # Return title and normalized format: "Title\nTLDR line\nBody"
     return title, f"{title}\n{tldr_line}\n{body}"
 
 

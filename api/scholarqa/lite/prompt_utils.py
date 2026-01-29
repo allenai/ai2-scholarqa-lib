@@ -10,7 +10,6 @@ from anyascii import anyascii
 from scholarqa.llms.prompts import UNIFIED_GENERATION_PROMPT, REPORT_TITLE_DIRECTIVE
 
 
-# Title generation prompt for lite pipeline (uses same directive as clustering step)
 TITLE_GENERATION_PROMPT = f"""Generate a concise report title based on the user query and section titles provided.
 
 {REPORT_TITLE_DIRECTIVE}

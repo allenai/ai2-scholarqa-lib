@@ -78,7 +78,7 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
-    scholar_qa = app_config.load_scholarqa(task_id, tool_request, sqa_class=ScholarQA)
+    scholar_qa = app_config.load_scholarqa(task_id, tool_request)
     return scholar_qa.run_qa_pipeline(tool_request)
 
 
