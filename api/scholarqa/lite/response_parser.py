@@ -49,12 +49,14 @@ def _extract_sections_raw(response: str) -> List[str]:
 
 
 def _clean_tldr(tldr: str) -> str:
-    """Remove LLM/Model citations and source counts from TLDR text."""
+    """Remove citations and source counts from TLDR text."""
     # Remove patterns like (LLM Memory), (Model-Generated), [LLM Memory], etc.
     cleaned = re.sub(r"\s*[\(\[][^)\]]*(?:LLM|Model)[^)\]]*[\)\]]", "", tldr)
     # Remove patterns like (N sources), (1 source)
     cleaned = re.sub(r"\s*\(\d+\s+sources?\)", "", cleaned, flags=re.IGNORECASE)
-    return cleaned.strip()
+    # Remove inline paper citations [corpus_id | Author | year | Citations: N]
+    cleaned = re.sub(r"\s*" + CITATION_PATTERN.pattern, "", cleaned)
+    return re.sub(r"[ ]+", " ", cleaned).strip()
 
 
 def _normalize_llm_memory(text: str) -> str:

@@ -63,6 +63,25 @@ class TestCleanTldr:
     def test_removes_source_count_large(self):
         assert _clean_tldr("TLDR; Summary. (19 sources)") == "TLDR; Summary."
 
+    def test_removes_single_inline_citation(self):
+        tldr = "TLDR; Models learn patterns [258999746 | Bui et al. | 2023 | Citations: 30]."
+        assert _clean_tldr(tldr) == "TLDR; Models learn patterns."
+
+    def test_removes_multiple_inline_citations(self):
+        tldr = (
+            "TLDR; Models learn patterns [258999746 | Bui et al. | 2023 | Citations: 30] "
+            "and data selection matters [234482526 | Zhou et al. | 2021 | Citations: 17]."
+        )
+        assert _clean_tldr(tldr) == "TLDR; Models learn patterns and data selection matters."
+
+    def test_removes_citation_with_extra_whitespace(self):
+        tldr = "TLDR; Summary [123 |  Smith et al.  |  2024  |  Citations:  5]."
+        assert _clean_tldr(tldr) == "TLDR; Summary."
+
+    def test_preserves_plain_tldr(self):
+        tldr = "TLDR; A plain summary with no citations."
+        assert _clean_tldr(tldr) == "TLDR; A plain summary with no citations."
+
 
 class TestNormalizeParagraphBreaks:
 
