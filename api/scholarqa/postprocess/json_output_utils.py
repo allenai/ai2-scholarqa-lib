@@ -7,6 +7,9 @@ from anyascii import anyascii
 
 logger = logging.getLogger(__name__)
 
+# Matches inline paper citations in format: [corpus_id | Author et al. | year | Citations: N]
+_CITATION_RE = re.compile(r"\s*\[\d+\s*\|[^\]]*\|\s*Citations:\s*\d+\]")
+
 
 def find_tldr_super_token(text: str) -> Optional[str]:
     # First, find the first instance of any token that has text "tldr" or "TLDR" in it, considering word boundaries
@@ -116,6 +119,8 @@ def get_json_summary(llm_model: str, summary_sections: List[str], summary_quotes
                               incite["inline_citations"].items()}
     for sec in summary_sections:
         curr_section = get_section_text(sec)
+        if "tldr" in curr_section and curr_section["tldr"]:
+            curr_section["tldr"] = re.sub(r"[ ]+", " ", _CITATION_RE.sub("", curr_section["tldr"])).strip()
         text = curr_section["text"]
         if curr_section:
             pattern = r"(?:; )?(\d+ \| [A-Za-z. ]+ \| \d+ \| Citations: \d+)"

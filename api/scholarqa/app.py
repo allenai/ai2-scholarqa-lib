@@ -23,6 +23,7 @@ from scholarqa.rag.reranker.reranker_base import RERANKER_MAPPING
 from scholarqa.rag.retrieval import PaperFinderWithReranker, PaperFinder
 from scholarqa.rag.retriever_base import FullTextRetriever
 from scholarqa.scholar_qa import ScholarQA
+from scholarqa.lite import ScholarQALite
 from scholarqa.state_mgmt.local_state_mgr import LocalStateMgrClient
 from typing import Type, TypeVar
 
@@ -41,6 +42,9 @@ def lazy_load_state_mgr_client():
     return LocalStateMgrClient(logs_config.log_dir, "async_state")
 
 
+SQA_MODE = os.environ.get("SQA_MODE", "default")
+
+
 def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Type[T] = ScholarQA, **sqa_args) -> T:
     retriever = FullTextRetriever(**run_config.retriever_args)
     if run_config.reranker_args:
@@ -50,6 +54,10 @@ def lazy_load_scholarqa(task_id: str, tool_req: ToolRequest=None, sqa_class: Typ
         paper_finder = PaperFinder(retriever, **run_config.paper_finder_args)
 
     init_kwargs = {**run_config.pipeline_args, **sqa_args}
+
+    if SQA_MODE == "lite":
+        sqa_class = ScholarQALite
+        init_kwargs["lite_pipeline_args"] = run_config.lite_pipeline_args
 
     return sqa_class(paper_finder=paper_finder, task_id=task_id, state_mgr=app_config.state_mgr_client,
                      logs_config=logs_config, **init_kwargs)

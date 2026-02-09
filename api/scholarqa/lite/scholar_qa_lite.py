@@ -49,7 +49,7 @@ class ScholarQALite(ScholarQA):
         prompt = build_prompt(query, section_references)
         logger.info(f"Built lite generation prompt with {len(section_references)} references")
 
-        llm_kwargs = {**self.lite_pipeline_args, "api_key": os.environ.get("REPORT_GENERATION_API_KEY")}
+        llm_kwargs = {**self.lite_pipeline_args}
         register_model(llm_kwargs)
         model = llm_kwargs.pop("model")
 
