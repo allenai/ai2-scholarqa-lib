@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 #Help generate the rest of the file
 name = "ai2-scholar-qa"
-version = "0.8.8"
+version = "0.8.9"
 readme = "README.md"
 license = {text = 'Apache-2.0'}
 description = "Python package to embed the Ai2 Scholar QA functionality in another application"
