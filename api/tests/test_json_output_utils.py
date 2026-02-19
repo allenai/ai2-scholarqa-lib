@@ -5,7 +5,7 @@ class TestGetSectionTextTldrCitations:
     """Test that get_section_text extracts TLDRs correctly, paired with
     _CITATION_RE which strips raw citations in get_json_summary."""
 
-    def test_tldr_with_citations_is_strippable(self):
+    def test_tldr_citations_are_stripped(self):
         """Simulate what get_json_summary does: extract TLDR, then strip citations."""
         gen_text = (
             "Introduction/Background\n"
@@ -45,8 +45,8 @@ class TestGetSectionTextTldrCitations:
         cleaned = _CITATION_RE.sub("", tldr).strip()
         assert "999" not in cleaned
 
-    def test_duplicate_tldr_tokens_from_prod(self):
-        """Exact input from GCP prod log (task b6b0ccc8) — IndexError on text_parts[1]."""
+    def test_duplicate_tldr_tokens(self):
+        """Duplicate TLDR lines should not crash."""
         gen_text = (
             "Introduction/Background\n"
             "TLDR; Large language models learn to predict the next token in huge text "
@@ -69,8 +69,8 @@ class TestGetSectionTextTldrCitations:
         assert "TLDR" not in section["text"]
         assert "Training an LLM" in section["text"]
 
-    def test_tldr_with_no_body_text_from_prod(self):
-        """Exact input from GCP prod log (task 9ab0b93e) — IndexError, TLDR is last line."""
+    def test_tldr_with_no_body_text(self):
+        """TLDR as last line with no body text should not crash."""
         gen_text = (
             "Regulatory & implementation milestones\n"
             "TLDR; RTS,S entered Phase-III trials in 2016 and is now in country roll-outs, "
@@ -81,8 +81,8 @@ class TestGetSectionTextTldrCitations:
         assert "RTS,S" in section["tldr"]
         assert section["text"].strip() == ""
 
-    def test_garbled_tldr_token_from_prod(self):
-        """Exact input from GCP prod log (task 135abc2a) — LLM emitted 'TLations;' instead of 'TLDR;'."""
+    def test_garbled_tldr_token(self):
+        """Garbled TLDR token should fall back to title + text."""
         gen_text = (
             "Future Directions and Emerging Trends\n"
             "TLations; As information environments continue to evolve, the relationship "
@@ -95,7 +95,7 @@ class TestGetSectionTextTldrCitations:
         assert "information environments" in section["text"]
 
 
-class TestGetJsonSummarySkipsUnparseableSections:
+class TestGetJsonSummaryErrorHandling:
     """Test that get_json_summary skips sections that fail to parse
     instead of crashing the entire report."""
 
