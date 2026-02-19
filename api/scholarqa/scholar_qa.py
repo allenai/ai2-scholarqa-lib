@@ -9,12 +9,13 @@ from uuid import uuid4
 import pandas as pd
 from anyascii import anyascii
 from langsmith import traceable
+from difflib import SequenceMatcher
 
 from scholarqa.config.config_setup import LogsConfig
-from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT
+from scholarqa.llms.constants import CostAwareLLMResult, CLAUDE_4_SONNET, CLAUDE_37_SONNET, GPT_5_CHAT, STATUS_SYNTHESIS
 from scholarqa.llms.litellm_helper import CostAwareLLMCaller, CostReportingArgs
 from scholarqa.llms.prompts import SYSTEM_PROMPT_QUOTE_PER_PAPER, SYSTEM_PROMPT_QUOTE_CLUSTER, PROMPT_ASSEMBLE_SUMMARY
-from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, CitationSrc
+from scholarqa.models import GeneratedSection, GeneratedReportData, TaskResult, ToolRequest, CitationSrc
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.preprocess.query_preprocessor import validate, decompose_query, LLMProcessedQuery
 from scholarqa.rag.multi_step_qa_pipeline import MultiStepQAPipeline
@@ -119,7 +120,7 @@ class ScholarQA:
         rewritten_query = llm_processed_query.rewritten_query
         keyword_query = llm_processed_query.keyword_query
         self.update_task_state(
-            f"Retrieving relevant passages from a corpus of 8M+ open access papers",
+            f"Retrieving relevant passages from a corpus of 12M+ open access papers",
             step_estimated_time=5
         )
         # Get relevant paper passages from the Semantic Scholar index for the llm rewritten query
@@ -193,7 +194,6 @@ class ScholarQA:
     def step_clustering(self, query: str, per_paper_summaries: Dict[str, str], cost_args: CostReportingArgs = None,
                         sys_prompt: str = SYSTEM_PROMPT_QUOTE_CLUSTER) -> CostAwareLLMResult:
         logger.info("Running Step 2: Clustering the extracted quotes into meaningful dimensions")
-        self.update_task_state("Synthesizing an answer outline based on extracted quotes", step_estimated_time=15)
         start = time()
         cost_args = cost_args._replace(model=self.multi_step_pipeline.llm_model)._replace(
             description="Corpus QA Step 2: Clustering quotes into dimensions")
@@ -271,11 +271,25 @@ class ScholarQA:
 
                     shift = 0  # keep track of changes to the quote offsets when the inline citations are modified
                     for sidx, sentence in enumerate(sentences):
-                        # can lookup exact string now since we prompt the llm to include the citations in the quotes
+                        # Method 1: Exact string matching (high precision)
                         lookup_idx = sentence["text"].lower().find(quote.lower().strip())
                         raw_match = lookup_idx >= 0
+
+                        # Method 2: Alphabet-only matching (high recall)
                         if not raw_match:
                             lookup_idx = sent_alpha[sidx].find(quote_reg)
+
+                        # Method 3: Word-level overlap matching for approximate matches
+                        if lookup_idx < 0 and len(quote.strip()) > 20:  # Only for longer quotes to avoid false positives
+                            quote_words = quote.lower().strip().split()
+                            sentence_words = sentence["text"].lower().split()
+                            matching_subsequence, overlap_ratio = ScholarQA._word_overlap_match(
+                                quote_words, sentence_words, threshold=0.75
+                            )
+                            if matching_subsequence:
+                                # Find the subsequence in the sentence text to get character index
+                                lookup_idx = sentence["text"].lower().find(matching_subsequence)
+
                         if lookup_idx >= 0:
                             lookup_end = lookup_idx + len(quote)
                             curr_quote_map["section_title"] = sentence["section_title"]
@@ -287,7 +301,7 @@ class ScholarQA:
                                     # check if the sentence offset is within the range of the quote
                                     # the sentence can be completely or partially inside the quote
                                     if (lookup_idx < soff["end"] <= lookup_end) or (
-                                            lookup_idx <= soff["start"] < lookup_end)\
+                                            lookup_idx <= soff["start"] < lookup_end) \
                                             or (soff["start"] <= lookup_idx and lookup_end <= soff["end"]):
                                         curr_quote_map["sentence_offsets"].append(soff)
                             if sentence.get("ref_mentions"):
@@ -309,7 +323,10 @@ class ScholarQA:
                     if "section_title" not in curr_quote_map:
                         curr_quote_map["pdf_hash"] = ""
                         for field in ["title", "abstract"]:
-                            if row[field] and new_quote.lower() in row[field].lower():
+                            if row[field] and (
+                                    new_quote.lower() in row[field].lower() or quote_reg in re.sub(r'[^a-zA-Z]', '',
+                                                                                                   row[field]).lower())\
+                                    or ScholarQA._word_overlap_match(new_quote.lower().split(), row[field].lower().split())[0]:
                                 curr_quote_map["section_title"] = field
                     mapped_quotes.append(curr_quote_map)
                 quotes_metadata[ref_str] = mapped_quotes
@@ -322,6 +339,53 @@ class ScholarQA:
                 per_paper_summaries[ref_str] = updated_quotes
 
         return quotes_metadata
+
+    @staticmethod
+    def _word_overlap_match(quote_words: List[str], sentence_words: List[str], threshold: float = 0.75) -> Tuple[str, float]:
+        """
+        Find word overlap using SequenceMatcher matching blocks.
+
+        Args:
+            quote_words: List of words from the quote (should be normalized/lowercased)
+            sentence_words: List of words from the sentence (should be normalized/lowercased)
+            threshold: Minimum overlap ratio (matching words / quote length) to consider a match
+
+        Returns:
+            Tuple of (first_matching_subsequence, overlap_ratio). Returns ("", 0.0) if insufficient overlap.
+        """
+        if not quote_words or not sentence_words:
+            return "", 0.0
+
+        # Strip punctuation from sentence words for better matching
+        sentence_words_clean = [re.sub(r'[^\w]', '', word) for word in sentence_words]
+
+        quote_words_clean = [re.sub(r'[^\w]', '', word) for word in quote_words]
+        quote_words_set = set(quote_words_clean)
+        if len(quote_words_set.intersection(set(sentence_words_clean))) / len(quote_words_set) < 0.5:
+            return "", 0.0
+
+        matcher = SequenceMatcher(None, quote_words_clean, sentence_words_clean)
+        matching_blocks = matcher.get_matching_blocks()
+
+        # Calculate total matching words from all blocks (excluding the final dummy block)
+        total_matching_words = sum(block.size for block in matching_blocks[:-1])
+        overlap_ratio = total_matching_words / len(quote_words)
+
+        if overlap_ratio >= threshold and matching_blocks:
+            # Get the first matching block with size > 1 and convert to string
+            for block in matching_blocks:
+                if block.size > 1:
+                    first_block = matching_blocks[0]
+                    start_idx = first_block.b  # Start index in sentence
+                    block_size = first_block.size  # Length of matching block
+                    # Extract the matching subsequence from the sentence
+                    matching_subsequence = " ".join(sentence_words[start_idx:start_idx + block_size])
+                    return matching_subsequence, overlap_ratio
+
+
+
+        return "", overlap_ratio
+
 
     def filter_metadata(self, paper_metadata: Dict[str, Any]) -> bool:
         return True
@@ -433,7 +497,7 @@ class ScholarQA:
                 value_model=payload["value_model"],
             )
             tlist[dim["idx"]] = (table, costs)
-            
+
         task_id = self.task_id if self.task_id else self.tool_request.task_id
         payload = {
             "task_id": task_id,
@@ -451,74 +515,29 @@ class ScholarQA:
     def get_user_msg_id(self):
         return self.tool_request.user_id, self.task_id
 
-    @traceable(run_type="tool", name="ai2_scholar_qa_trace")
-    def run_qa_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+    def generate_report(
+        self,
+        query: str,
+        reranked_df: pd.DataFrame,
+        paper_metadata: Dict[str, Any],
+        cost_args: CostReportingArgs,
+        event_trace: EventTrace,
+        user_id: str,
+        inline_tags: bool = False
+    ) -> GeneratedReportData:
         """
-                This function takes a query and returns a response.
-                Goes through the following steps:
-                0) Decompose the query to get filters like year, venue, fos, citations, etc along with a re-written
-                version of the query and a query suitable for keyword search.
-                1) Query retrieval to get the relevant snippets from the index (n_retrieval)
-                1.1) Query semantic scholar with the keyword search query to get the relevant papers.(n_keyword_srch)
-                2) Re-rank the snippets based on the query with a cross encoder (n_rerank)
-                3) Get exact relevant quotes from an LLM
-                4) Generate outline and cluster the quotes from (3)
-                4.1) The quotes cluster in the outline have inline citations associated with them. Map the quotes to
-                their inline citations and include them with the quotes.
-                5) Generate the summarized output using the quotes and outline in (3) and (4)
+        Generate report from retrieved papers using quote extraction, clustering,
+        and iterative summary. Override in subclasses for alternative approaches.
 
-                :param req: A scientific query posed to scholar qa by a user, consists of the string query, task id and user id
-                :param inline_tags: Whether to include inline <paper> tags in the output or not
-                :return: A response to the query
-
+        :param query: The user's search query
+        :param reranked_df: DataFrame of reranked paper snippets
+        :param paper_metadata: Metadata for the papers
+        :param cost_args: Cost tracking arguments
+        :param event_trace: Event tracing object
+        :param user_id: User identifier
+        :param inline_tags: Whether to include inline <paper> tags in the output
+        :return: GeneratedReportData containing intermediate results for finalization
         """
-        self.tool_request = req
-        self.update_task_state("Processing user query", task_estimated_time="~3 minutes", step_estimated_time=5)
-        task_id = self.task_id if self.task_id else req.task_id
-        user_id, msg_id = self.get_user_msg_id()
-        msg_id = task_id if not msg_id else msg_id
-        query = req.query
-        logger.info(
-            f"Received query: {query} from user_id: {user_id} with opt_in: {req.opt_in}"
-        )
-        event_trace = EventTrace(
-            task_id,
-            self.paper_finder.retriever.n_retrieval if hasattr(self.paper_finder.retriever, "n_retrieval") else 0,
-            # noqa
-            self.paper_finder.n_rerank,
-            req,
-            user_id=user_id
-        )
-        cost_args = CostReportingArgs(
-            task_id=task_id,
-            user_id=user_id,
-            description="Step 0: Query decomposition",
-            model=self.llm_model,
-            msg_id=msg_id
-        )
-        llm_processed_query = self.preprocess_query(query, cost_args)
-        event_trace.trace_decomposition_event(llm_processed_query)
-
-        # Paper finder step - retrieve relevant paper passages from semantic scholar index and api
-        snippet_srch_res, s2_srch_res = self.find_relevant_papers(llm_processed_query.result)
-        retrieved_candidates = snippet_srch_res + s2_srch_res
-        if not retrieved_candidates:
-            raise Exception(
-                f"There is no relevant information in the retrieved snippets for query: {query}.")
-        event_trace.trace_retrieval_event(retrieved_candidates)
-
-        # Rerank the retrieved candidates based on the query with a cross encoder
-        s2_srch_metadata = [{k: v for k, v in paper.items() if
-                             k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS} for paper in
-                            retrieved_candidates if "s2FieldsOfStudy" in paper]
-        reranked_df, paper_metadata = self.rerank_and_aggregate(query, retrieved_candidates,
-                                                                {str(paper["corpus_id"]): paper for paper in
-                                                                 s2_srch_metadata})
-        if reranked_df.empty:
-            raise Exception(
-                "No relevant papers found for the query post reranking, skipping quote extraction.")
-        event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
-
         # Step 1 - quote extraction
         per_paper_summaries = self.step_select_quotes(query, reranked_df, cost_args)
         if not per_paper_summaries.result:
@@ -605,7 +624,103 @@ class ScholarQA:
                     tables_val = tables[sidx]
             json_summary[sidx]["table"] = tables_val.to_dict() if tables_val else None
             generated_sections[sidx].table = tables_val if tables_val else None
-        self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
-        event_trace.trace_summary_event(json_summary, all_sections, tcosts)
+
+        return GeneratedReportData(
+            report_title=self.report_title,
+            sections=generated_sections,
+            json_summary=json_summary,
+            cost_result=all_sections,
+            tcosts=tcosts,
+            quotes_metadata=quotes_metadata
+        )
+
+    @traceable(run_type="tool", name="ai2_scholar_qa_trace")
+    def run_qa_pipeline(self, req: ToolRequest, inline_tags=False) -> TaskResult:
+        """
+                This function takes a query and returns a response.
+                Goes through the following steps:
+                0) Decompose the query to get filters like year, venue, fos, citations, etc along with a re-written
+                version of the query and a query suitable for keyword search.
+                1) Query retrieval to get the relevant snippets from the index (n_retrieval)
+                1.1) Query semantic scholar with the keyword search query to get the relevant papers.(n_keyword_srch)
+                2) Re-rank the snippets based on the query with a cross encoder (n_rerank)
+                3) Get exact relevant quotes from an LLM
+                4) Generate outline and cluster the quotes from (3)
+                4.1) The quotes cluster in the outline have inline citations associated with them. Map the quotes to
+                their inline citations and include them with the quotes.
+                5) Generate the summarized output using the quotes and outline in (3) and (4)
+
+                :param req: A scientific query posed to scholar qa by a user, consists of the string query, task id and user id
+                :param inline_tags: Whether to include inline <paper> tags in the output or not
+                :return: A response to the query
+
+        """
+        self.tool_request = req
+        self.update_task_state("Processing user query", task_estimated_time="~3 minutes", step_estimated_time=5)
+        task_id = self.task_id if self.task_id else req.task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
+        query = req.query
+        logger.info(
+            f"Received query: {query} from user_id: {user_id} with opt_in: {req.opt_in}"
+        )
+        event_trace = EventTrace(
+            task_id,
+            self.paper_finder.retriever.n_retrieval if hasattr(self.paper_finder.retriever, "n_retrieval") else 0,
+            # noqa
+            self.paper_finder.n_rerank,
+            req,
+            user_id=user_id
+        )
+        cost_args = CostReportingArgs(
+            task_id=task_id,
+            user_id=user_id,
+            description="Step 0: Query decomposition",
+            model=self.llm_model,
+            msg_id=msg_id
+        )
+        llm_processed_query = self.preprocess_query(query, cost_args)
+        event_trace.trace_decomposition_event(llm_processed_query)
+
+        # Paper finder step - retrieve relevant paper passages from semantic scholar index and api
+        snippet_srch_res, s2_srch_res = self.find_relevant_papers(llm_processed_query.result)
+        retrieved_candidates = snippet_srch_res + s2_srch_res
+        if not retrieved_candidates:
+            raise Exception(
+                f"There is no relevant information in the retrieved snippets for query: {query}.")
+        event_trace.trace_retrieval_event(retrieved_candidates)
+
+        # Rerank the retrieved candidates based on the query with a cross encoder
+        s2_srch_metadata = [{k: v for k, v in paper.items() if
+                             k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS} for paper in
+                            retrieved_candidates if "s2FieldsOfStudy" in paper]
+        reranked_df, paper_metadata = self.rerank_and_aggregate(query, retrieved_candidates,
+                                                                {str(paper["corpus_id"]): paper for paper in
+                                                                 s2_srch_metadata})
+        if reranked_df.empty:
+            raise Exception(
+                "No relevant papers found for the query post reranking, skipping quote extraction.")
+        event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
+
+        self.update_task_state(STATUS_SYNTHESIS)
+        report_data = self.generate_report(
+            query=query,
+            reranked_df=reranked_df,
+            paper_metadata=paper_metadata,
+            cost_args=cost_args,
+            event_trace=event_trace,
+            user_id=user_id,
+            inline_tags=inline_tags
+        )
+
+        # Finalization: postprocess, trace, and persist
+        self.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
+        event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
         event_trace.persist_trace(self.logs_config)
-        return TaskResult(report_title=self.report_title, sections=generated_sections, cost=event_trace.total_cost, tokens=event_trace.tokens)
+
+        return TaskResult(
+            report_title=report_data.report_title,
+            sections=report_data.sections,
+            cost=event_trace.total_cost,
+            tokens=event_trace.tokens
+        )

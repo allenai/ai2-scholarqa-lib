@@ -21,7 +21,25 @@ Sometimes you will see authors and/or section titles. Do not use them in your an
 
 Output the quote ONLY. Do not introduce it with any text, formatting, or white spaces.
 
-If the paper does not answer the user query at all, just output None
+If the paper does not answer the user query at all, just output None.
+
+The output MUST either be the exact extracted quote or the word None. 
+DO NOT output the reasoning behind your decision or any opinions other than what is present in the provided text.
+The output should be in json format as per following examples:
+<examples>
+Example 1 (Irrelevant paper): 
+Input:  As one of the typical problems, this is to decide whether a given sample has a solution and find one if it has.
+Output: 
+```json
+{"quote": "None"}
+```
+Example 2 (Relevant paper):
+Input:  As one of the typical problems, this is to decide whether a given sample has a solution and find one if it has.
+Output: 
+```json
+{"quote": "decide whether a given sample has a solution."}
+```
+</examples>
 """
 
 USER_PROMPT_PAPER_LIST_FORMAT = """
@@ -227,6 +245,56 @@ Rules for section formatting:
 - The section format MUST match what's in the parentheses of the section name. A list HAS to be a list. a SYNTHESIS has to be a paragraph. Seriously.
 </format and structure instructions>
 """
+
+UNIFIED_GENERATION_PROMPT = """A user issued a query and a set of research papers were provided with salient content.
+The user query was: {query}
+
+I will provide you with a list of chosen quotes from these papers that are relevant to the user query.
+Your job is to help me write this a multi-section answer to the query and cite the provided quoted references.
+
+Here are the relevant reference quotes to cite:
+<section_references>
+{refs_json}
+</section_references>
+
+<citation instructions>
+- Each reference is a key value pair, where the key is a pipe separated string enclosed in square brackets representing [ID | AUTHOR_REF | YEAR | Citations: CITES].
+
+The value consists of quotes from the reference, eg. "[2345677 | Doe, Moe et al. | 2024 | Citations: 25]": "This is the reference text."
+
+- Please write the answer, making sure to cite the relevant references inline using the corresponding reference key in the format: [ID | AUTHOR_REF | YEAR | Citations: CITES]. You may use more than one reference key in a row if it's appropriate. In general, use all of the references that support your written text.
+
+- You can add something from your own knowledge. This should only be done if you are sure about its truth and/or if there is not enough information in the references to answer the user's question. Cite the text from your knowledge as (LLM Memory). The citation should follow AFTER the text. Don't cite LLM Memory with another evidence source.
+
+- Note that all citations that support what you write must come after the text you write. That's how humans read in-line cited text. First text, then the citation.
+</citation instructions>
+
+<writing instructions>
+The answer should have multiple sections. Each section should have the following characteristics:
+- Before the section write a 2 sentence "TLDR;" of the section. No citations here. Precede with the text "TLDR;"
+- Use direct and simple language everywhere, like "use" and "can". Avoid using more complex words if simple ones will do.
+- Use the citation count to decide what is "notable" or "important". If the citation count is 100 or more, you are allowed to use value judgments like "notable."
+- Some references are older. Something that claims to be "state of the art" but is from 2020 may not be any more. Please avoid making such claims. Note that the current year is 2025.
+- Be concise.
+- The answer should directly respond to the user query.
+- Multiple references may express the same idea. If so, you can cite multiple references in a single sentence.
+- Do not make the same points across multiple sections.
+</writing instructions>
+
+<format and structure instructions>
+Start each section with a 'SECTION;' marker followed by its section_name and then a newline and then the text "TLDR;", the actual TLDR, and then write the summary.
+
+Example format:
+SECTION; Introduction to Text Classification
+TLDR; Overview of the text classification problem and its applications.
+Text classification is a fundamental NLP task...
+
+Rules for section formatting:
+- If the section would be more readable as a list (e.g.,"Important Papers"), then format the section as a LIST (required).
+- Otherwise write one or more SYNTHESIS paragraphs for each section (required).
+- Use section names to judge what section format would be best. Lists and synthesis paragraphs are the only allowed formats.
+- Write the section content using markdown format.
+</format and structure instructions>"""
 
 QUERY_DECOMPOSER_PROMPT = """
 <task>

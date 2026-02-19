@@ -200,7 +200,7 @@ class RunConfig(BaseModel):
    of retrieval/reranker you want to instantiate. Ai2 Scholar QA uses the
    `FullTextRetriever` and `ModalReranker` respectively, which are chosen based on the
    default  `public_api` and `modal` config values respectively. To choose a
-   SentenceTransformers reranker, replace `modal` with `cross_encoder` or
+   SentenceTransformers reranker, replace `modal` with `crossencoder` or
    `biencoder` or define your own types.
  
   ii. `*(retriever, reranker, paper_finder, pipeline)_args` are used to

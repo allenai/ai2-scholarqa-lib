@@ -72,6 +72,26 @@ def setup_llm_cache(cache_type: str = "s3", **cache_args):
     litellm.enable_cache()
 
 
+def register_model(llm_kwargs: dict) -> None:
+    """Register a custom model with litellm if not already known."""
+    model = llm_kwargs.get("model")
+    if not model:
+        return
+    try:
+        litellm.get_model_info(model)
+        return
+    except Exception:
+        max_tokens = llm_kwargs.get("max_tokens", 4096)
+        logger.info(f"Registering model {model} with litellm (max_tokens={max_tokens})")
+        litellm.register_model({
+            model: {
+                "max_tokens": max_tokens,
+                "input_cost_per_token": 0.0,
+                "output_cost_per_token": 0.0,
+            }
+        })
+
+
 @traceable(run_type="llm", name="batch completion")
 def batch_llm_completion(model: str, messages: List[str], system_prompt: str = None, fallback: Optional[str] = GPT_5_CHAT,
                          **llm_lite_params) -> List[Optional[CompletionResult]]:
