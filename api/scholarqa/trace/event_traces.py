@@ -18,6 +18,7 @@ class EventTrace:
         else:
             self.user_id = user_id
         self.task_id = task_id
+        self.thread_id = req.thread_id if req.thread_id else task_id
         self.timestamp = datetime.now().isoformat()
         self.n_retrieval = n_retrieval
         self.n_retrieved = 0

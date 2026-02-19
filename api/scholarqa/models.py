@@ -21,8 +21,6 @@ class PaperDetails(BaseModel):
         "The number of times the source paper has been cited"
     ))
 
-
-# TODO: define your request data
 class ToolRequest(BaseModel):
     task_id: Optional[str] = Field(default=None, description=(
         "Reference to a long-running task. Provide this argument to receive an update on its"
@@ -34,22 +32,25 @@ class ToolRequest(BaseModel):
     opt_in: Optional[bool] = Field(default=True, description=(
         "Flag to indicate whether to include the query and response in public release"))
     user_id: Optional[str] = Field(default=None, description="The user id of the user who posed the query")
-    # Edit workflow fields
-    edit_existing: Optional[bool] = Field(default=False, description=(
-        "Flag to indicate if this request is to edit an existing report (True) or generate a new one (False)"
-    ))
-    thread_id: Optional[str] = Field(default=None, description=(
-        "ID of the thread containing the current report to edit. Required if edit_existing is True"
-    ))
-    edit_instruction: Optional[str] = Field(default=None, description=(
-        "Decontextualized natural language description of the edit to perform. "
-        "Required if edit_existing is True. Examples: 'Add these papers to the report', "
-        "'Shorten section 3', 'Expand section 4 to include X topic', 'Go deeper on section 5'"
-    ))
-    mentioned_papers: Optional[List[int]] = Field(default=None, description=(
-        "List of corpus_ids mentioned by the user that are relevant to the edit instruction"
-    ))
 
+class ReportEditRequest(ToolRequest):
+    """Request model for report editing endpoint"""
+    intent: str = Field(
+        description="Decontextualized natural language description of the edit to perform. "
+        "Examples: 'Add these papers to the report', 'Shorten section 3', "
+        "'Expand section 4 to include X topic', 'Go deeper on section 5'"
+    )
+    section_titles: Optional[List[str]] = Field(
+        default=[],
+        description="List of section titles to edit. Empty means all sections."
+    )
+    corpus_ids: Optional[List[str]] = Field(
+        default=[],
+        description="List of corpus IDs to add to the report"
+    )
+    thread_id: str = Field(description=(
+        "ID of the thread containing the current report to edit"
+    ))
 
 class CitationSrc(BaseModel):
     id: str = Field(default=None, description=(
