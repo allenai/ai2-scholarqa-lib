@@ -1,4 +1,4 @@
-from scholarqa.postprocess.json_output_utils import get_section_text, _CITATION_RE
+from scholarqa.postprocess.json_output_utils import get_section_text, get_json_summary, _CITATION_RE
 
 
 class TestGetSectionTextTldrCitations:
@@ -45,27 +45,97 @@ class TestGetSectionTextTldrCitations:
         cleaned = _CITATION_RE.sub("", tldr).strip()
         assert "999" not in cleaned
 
-    def test_duplicate_tldr_tokens(self):
-        """LLM sometimes generates two TLDR lines; should not crash."""
+    def test_duplicate_tldr_tokens_from_prod(self):
+        """Exact input from GCP prod log (task b6b0ccc8) — IndexError on text_parts[1]."""
         gen_text = (
             "Introduction/Background\n"
-            "TLDR; Large language models learn to predict the next token.\n"
-            "TLDR; Large language models (LLMs) learn to predict the next token.\n\n"
-            "Training an LLM starts with understanding its purpose."
+            "TLDR; Large language models learn to predict the next token in huge text "
+            "collections and are then adapted to specific uses. They rely on the Transformer "
+            "architecture, scaling laws, and multi-stage training\u2014often using parameter-efficient "
+            "methods when fine-tuning large models.\n"
+            "TLDR; Large language models (LLMs) learn to predict the next token in huge text "
+            "collections and are then adapted to specific uses. They rely on the Transformer "
+            "architecture, scaling laws, and multi-stage training\u2014often using parameter-efficient "
+            "methods when fine-turing large models.\n\n"
+            "Training an LLM starts with understanding its purpose and basic setup. "
+            "LLMs are deep neural networks trained for language modeling\u2014that is, predicting "
+            "the next token in a sequence given its preceding context "
+            "[277994124 | Wei et al. | 2025 | Citations: 12] "
+            "[272827311 | Xu et al. | 2024 | Citations: 4]."
         )
         section = get_section_text(gen_text)
         assert section["title"] == "Introduction/Background"
-        assert "Large language models" in section["tldr"]
+        assert "predict the next token" in section["tldr"]
         assert "TLDR" not in section["text"]
         assert "Training an LLM" in section["text"]
 
-    def test_tldr_with_no_body_text(self):
-        """Edge case: TLDR line with no body text after it."""
+    def test_tldr_with_no_body_text_from_prod(self):
+        """Exact input from GCP prod log (task 9ab0b93e) — IndexError, TLDR is last line."""
         gen_text = (
-            "Summary\n"
-            "TLDR; Just a summary with no body."
+            "Regulatory & implementation milestones\n"
+            "TLDR; RTS,S entered Phase-III trials in 2016 and is now in country roll-outs, "
+            "while new dosing schedules and adjuvants are expected to raise protection levels.\n "
         )
         section = get_section_text(gen_text)
-        assert section["title"] == "Summary"
-        assert "Just a summary" in section["tldr"]
-        assert section["text"] == ""
+        assert section["title"] == "Regulatory & implementation milestones"
+        assert "RTS,S" in section["tldr"]
+        assert section["text"].strip() == ""
+
+    def test_garbled_tldr_token_from_prod(self):
+        """Exact input from GCP prod log (task 135abc2a) — LLM emitted 'TLations;' instead of 'TLDR;'."""
+        gen_text = (
+            "Future Directions and Emerging Trends\n"
+            "TLations; As information environments continue to evolve, the relationship "
+            "between Information Foraging Theory and Exploratory Search will likely expand "
+            "to address new forms of information seeking behavior and technological affordances."
+        )
+        section = get_section_text(gen_text)
+        assert section["title"] == "Future Directions and Emerging Trends"
+        assert "tldr" not in section
+        assert "information environments" in section["text"]
+
+
+class TestGetJsonSummarySkipsUnparseableSections:
+    """Test that get_json_summary skips sections that fail to parse
+    instead of crashing the entire report."""
+
+    def test_unparseable_section_is_skipped(self):
+        """A single-line section with no TLDR and no newline is unparseable.
+        get_json_summary should skip it and still return the good sections."""
+        good_section = (
+            "Introduction\n"
+            "**TLDR:** A good summary.\n"
+            "Body text with details."
+        )
+        bad_section = "Just a single line with no structure"
+        summary_sections = [good_section, bad_section]
+        # Minimal valid inputs for get_json_summary
+        summary_quotes = {}
+        paper_metadata = {}
+        citation_ids = {}
+        result = get_json_summary(
+            llm_model="openai/gpt-4",
+            summary_sections=summary_sections,
+            summary_quotes=summary_quotes,
+            paper_metadata=paper_metadata,
+            citation_ids=citation_ids,
+        )
+        assert len(result) == 1
+        assert result[0]["title"] == "Introduction"
+
+    def test_all_good_sections_preserved(self):
+        """When all sections are parseable, none are dropped."""
+        sections = [
+            "Section A\n**TLDR:** Summary A.\nBody A.",
+            "Section B\n**TLDR:** Summary B.\nBody B.",
+        ]
+        result = get_json_summary(
+            llm_model="openai/gpt-4",
+            summary_sections=sections,
+            summary_quotes={},
+            paper_metadata={},
+            citation_ids={},
+        )
+        assert len(result) == 2
+        assert result[0]["title"] == "Section A"
+        assert result[1]["title"] == "Section B"

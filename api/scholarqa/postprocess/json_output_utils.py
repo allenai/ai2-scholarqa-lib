@@ -37,7 +37,16 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
     if tldr_token is not None:
         parts = gen_text.split(tldr_token, 1)
     else:
-        parts = [gen_text]
+        # No TLDR token found — fall back to first line as title, rest as text
+        line_parts = gen_text.strip().split("\n", 1)
+        if len(line_parts) > 1:
+            logger.warning(
+                "No TLDR token found in section (LLM may have garbled it). "
+                "Falling back to title + text only. First 100 chars: %s", gen_text[:100]
+            )
+            parts = line_parts
+        else:
+            parts = [gen_text]
     try:
         if len(parts) > 1:
             title = parts[0].strip()
@@ -126,7 +135,11 @@ def get_json_summary(llm_model: str, summary_sections: List[str], summary_quotes
     inline_citation_quotes = {anyascii(k): v for incite in summary_quotes.values() for k, v in
                               incite["inline_citations"].items()}
     for sec in summary_sections:
-        curr_section = get_section_text(sec)
+        try:
+            curr_section = get_section_text(sec)
+        except Exception:
+            logger.warning("Skipping unparseable section. First 200 chars: %s", sec[:200])
+            continue
         if "tldr" in curr_section and curr_section["tldr"]:
             curr_section["tldr"] = re.sub(r"[ ]+", " ", _CITATION_RE.sub("", curr_section["tldr"])).strip()
         text = curr_section["text"]
