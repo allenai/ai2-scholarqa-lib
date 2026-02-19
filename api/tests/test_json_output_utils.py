@@ -44,3 +44,28 @@ class TestGetSectionTextTldrCitations:
         tldr = "Summary [999 | Zhang | 2025 | Citations: 0] end."
         cleaned = _CITATION_RE.sub("", tldr).strip()
         assert "999" not in cleaned
+
+    def test_duplicate_tldr_tokens(self):
+        """LLM sometimes generates two TLDR lines; should not crash."""
+        gen_text = (
+            "Introduction/Background\n"
+            "TLDR; Large language models learn to predict the next token.\n"
+            "TLDR; Large language models (LLMs) learn to predict the next token.\n\n"
+            "Training an LLM starts with understanding its purpose."
+        )
+        section = get_section_text(gen_text)
+        assert section["title"] == "Introduction/Background"
+        assert "Large language models" in section["tldr"]
+        assert "TLDR" not in section["text"]
+        assert "Training an LLM" in section["text"]
+
+    def test_tldr_with_no_body_text(self):
+        """Edge case: TLDR line with no body text after it."""
+        gen_text = (
+            "Summary\n"
+            "TLDR; Just a summary with no body."
+        )
+        section = get_section_text(gen_text)
+        assert section["title"] == "Summary"
+        assert "Just a summary" in section["tldr"]
+        assert section["text"] == ""

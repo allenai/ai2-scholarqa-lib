@@ -35,7 +35,7 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
     tldr_token = find_tldr_super_token(gen_text)
     curr_section = dict()
     if tldr_token is not None:
-        parts = gen_text.split(tldr_token)
+        parts = gen_text.split(tldr_token, 1)
     else:
         parts = [gen_text]
     try:
@@ -47,7 +47,15 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
             if tldr_token is not None:
                 text_parts = parts[1].strip().split("\n", 1)
                 tldr = text_parts[0]  # Assume TLDR is a single line
-                text = text_parts[1]
+                text = text_parts[1] if len(text_parts) > 1 else ""
+                # Discard any duplicate TLDR lines from the body text
+                while text.lstrip().startswith(tldr_token):
+                    text = text.lstrip().split("\n", 1)[1] if "\n" in text.lstrip() else ""
+                if not text:
+                    logger.warning(
+                        "TLDR line has no body text following it (possible duplicate TLDR). "
+                        "Title: %s, TLDR: %s", curr_section.get("title", ""), tldr[:100]
+                    )
                 curr_section["tldr"] = tldr.strip('#').strip()
             else:
                 text = parts[1].strip()
