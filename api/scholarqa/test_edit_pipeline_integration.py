@@ -27,10 +27,7 @@ import pytest
 import pandas as pd
 from typing import Dict, Any, List
 
-from scholarqa.models import (
-    TaskResult, GeneratedSection, CitationSrc, PaperDetails, Author,
-    ReportEditRequest
-)
+from scholarqa.models import ReportEditRequest
 from scholarqa.preprocess.edit_intent_analyzer import (
     EditIntentAnalysis, analyze_edit_intent
 )
@@ -57,57 +54,12 @@ def load_sample_response() -> Dict[str, Any]:
         return json.load(f)
 
 
-def convert_to_task_result(sample_data: Dict[str, Any]) -> TaskResult:
-    """Convert sample response to TaskResult object."""
-    summary = sample_data["summary"]
-    sections = []
-
-    for sec_data in summary.get("sections", []):
-        # Convert citations
-        citations = []
-        for cit_data in sec_data.get("citations", []):
-            paper_data = cit_data.get("paper", {})
-
-            # Convert authors
-            authors = []
-            for author_data in paper_data.get("authors", []):
-                if isinstance(author_data, dict):
-                    authors.append(Author(
-                        name=author_data.get("name", "Unknown"),
-                        authorId=author_data.get("authorId")
-                    ))
-
-            paper = PaperDetails(
-                corpus_id=paper_data.get("corpus_id", 0),
-                title=paper_data.get("title", ""),
-                year=paper_data.get("year", 0),
-                venue=paper_data.get("venue"),
-                authors=authors,
-                n_citations=paper_data.get("n_citations", 0)
-            )
-
-            citation = CitationSrc(
-                id=cit_data.get("id", ""),
-                paper=paper,
-                snippets=cit_data.get("snippets", []),
-                score=cit_data.get("score", 0.0)
-            )
-            citations.append(citation)
-
-        section = GeneratedSection(
-            title=sec_data.get("title", ""),
-            tldr=sec_data.get("tldr", ""),
-            text=sec_data.get("text", ""),
-            citations=citations,
-            table=None
-        )
-        sections.append(section)
-
-    return TaskResult(
-        report_title="Type Inference Evaluation Datasets in Python",
-        sections=sections,
-        cost=summary.get("cost", 0.0)
-    )
+def extract_report_dict(sample_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract the report dict from sample data, adding report_title if missing."""
+    report = dict(sample_data["summary"])
+    if "report_title" not in report:
+        report["report_title"] = "Type Inference Evaluation Datasets in Python"
+    return report
 
 
 def print_intent_analysis(analysis: EditIntentAnalysis):
@@ -181,7 +133,7 @@ def create_edit_request(
 
 def run_intent_analysis(
     intent: str,
-    current_report: TaskResult,
+    current_report: Dict[str, Any],
     report_context: str = None,
     corpus_ids: List[str] = None,
     section_titles: List[str] = None,
@@ -288,8 +240,8 @@ def sample_data():
 
 @pytest.fixture
 def current_report(sample_data):
-    """Convert sample data to TaskResult."""
-    return convert_to_task_result(sample_data)
+    """Extract report dict from sample data."""
+    return extract_report_dict(sample_data)
 
 
 @pytest.fixture
@@ -307,16 +259,14 @@ def edit_pipeline():
     )
 
 
-def build_existing_per_paper_summaries(current_report: TaskResult) -> dict:
+def build_existing_per_paper_summaries(current_report: Dict[str, Any]) -> dict:
     """
     Build per_paper_summaries_extd from existing report citations
     (mirrors what the runner does in Step 4.5).
     """
     per_paper_summaries_extd = {}
-    for section in current_report.sections:
-        if not section.citations:
-            continue
-        for cit in section.citations:
+    for section in current_report.get("sections", []):
+        for cit in section.get("citations", []):
             ref_key, per_paper_entry, _ = EditPipeline.citation_to_ref_data(cit)
             if ref_key not in per_paper_summaries_extd:
                 per_paper_summaries_extd[ref_key] = per_paper_entry
@@ -361,26 +311,28 @@ class TestReportStructure:
         assert "summary" in sample_data
         assert "sections" in sample_data["summary"]
 
-    def test_convert_to_task_result(self, current_report):
-        """Verify conversion to TaskResult works."""
-        assert isinstance(current_report, TaskResult)
-        assert len(current_report.sections) == 5
-        assert current_report.sections[0].title == "Introduction to Type Inference Evaluation"
+    def test_report_dict_structure(self, current_report):
+        """Verify report dict has correct structure."""
+        assert isinstance(current_report, dict)
+        sections = current_report.get("sections", [])
+        assert len(sections) == 5
+        assert sections[0]["title"] == "Introduction to Type Inference Evaluation"
 
     def test_report_has_citations(self, current_report):
         """Verify citations are present in the report."""
         total_citations = sum(
-            len(sec.citations) for sec in current_report.sections
+            len(sec.get("citations", [])) for sec in current_report["sections"]
         )
         assert total_citations > 0, "Report should have citations"
 
     def test_citation_years_range(self, current_report):
         """Verify citations span expected year range."""
         years = set()
-        for sec in current_report.sections:
-            for cit in sec.citations:
-                if cit.paper.year:
-                    years.add(cit.paper.year)
+        for sec in current_report["sections"]:
+            for cit in sec.get("citations", []):
+                year = cit.get("paper", {}).get("year")
+                if year:
+                    years.add(year)
 
         assert min(years) == 2018, "Earliest paper should be 2018"
         assert max(years) == 2024, "Latest paper should be 2024"
@@ -539,7 +491,7 @@ class TestEndToEndScenarios:
         Flow: intent analysis -> LLM clustering -> section generation
         """
         edit_instruction = "Rewrite all sections to be more concise"
-        num_sections = len(current_report.sections)
+        num_sections = len(current_report["sections"])
 
         # --- Step 1: Intent Analysis ---
         print("\n" + "=" * 80)
@@ -599,9 +551,9 @@ class TestEndToEndScenarios:
 
         # Verify: existing papers should be retained in stylistic rewrite
         all_corpus_ids = set()
-        for section in current_report.sections:
-            for cit in (section.citations or []):
-                all_corpus_ids.add(str(cit.paper.corpus_id))
+        for section in current_report["sections"]:
+            for cit in section.get("citations", []):
+                all_corpus_ids.add(str(cit["paper"]["corpus_id"]))
         all_content = " ".join(sec.content for sec in active_sections)
         found_ids = {cid for cid in all_corpus_ids if cid in all_content}
         retention_rate = len(found_ids) / len(all_corpus_ids) if all_corpus_ids else 0
@@ -617,7 +569,7 @@ class TestEndToEndScenarios:
         """
         edit_instruction = "Rewrite the Introduction to be more technical"
         target_title = "Introduction to Type Inference Evaluation"
-        num_sections = len(current_report.sections)
+        num_sections = len(current_report["sections"])
 
         # --- Step 1: Intent Analysis ---
         print("\n" + "=" * 80)
@@ -691,7 +643,7 @@ class TestEndToEndScenarios:
         Flow: intent analysis -> LLM clustering -> section generation
         """
         edit_instruction = "Remove papers before 2020"
-        num_sections = len(current_report.sections)
+        num_sections = len(current_report["sections"])
 
         # --- Step 1: Intent Analysis ---
         print("\n" + "=" * 80)
@@ -774,7 +726,7 @@ class TestEndToEndScenarios:
         Flow: intent analysis -> LLM clustering -> section generation
         """
         edit_instruction = "Remove paper 56482376"
-        num_sections = len(current_report.sections)
+        num_sections = len(current_report["sections"])
 
         # --- Step 1: Intent Analysis ---
         print("\n" + "=" * 80)
@@ -844,7 +796,7 @@ class TestEndToEndScenarios:
         Flow: intent analysis -> LLM clustering -> section generation
         """
         edit_instruction = "Shorten the Dataset Characteristics section"
-        num_sections = len(current_report.sections)
+        num_sections = len(current_report["sections"])
 
         # --- Step 1: Intent Analysis ---
         print("\n" + "=" * 80)
@@ -897,7 +849,7 @@ class TestEndToEndScenarios:
         print("\n--- Step 3: Section Generation ---")
 
         # Measure original length of the target section
-        original_lengths = {sec.title: len(sec.text) for sec in current_report.sections}
+        original_lengths = {sec["title"]: len(sec.get("text", "")) for sec in current_report["sections"]}
         per_paper_summaries_extd = build_existing_per_paper_summaries(current_report)
 
         gen_iter = edit_pipeline.generate_iterative_summary_edit(
@@ -931,8 +883,8 @@ class TestEndToEndScenarios:
         Flow: intent analysis -> LLM clustering -> section generation
         This scenario was previously impossible with hardcoded plans.
         """
-        target_section = current_report.sections[-1].title  # Last section
-        num_sections = len(current_report.sections)
+        target_section = current_report["sections"][-1]["title"]  # Last section
+        num_sections = len(current_report["sections"])
         edit_instruction = f"Delete the {target_section} section"
 
         # --- Step 1: Intent Analysis ---
@@ -2077,21 +2029,21 @@ if __name__ == "__main__":
     # Quick verification that sample data loads
     print("Loading sample data...")
     data = load_sample_response()
-    report = convert_to_task_result(data)
+    report = extract_report_dict(data)
 
     print(f"Original query: {data['query']}")
-    print(f"Report title: {report.report_title}")
-    print(f"Number of sections: {len(report.sections)}")
+    print(f"Report title: {report.get('report_title', 'N/A')}")
+    print(f"Number of sections: {len(report.get('sections', []))}")
 
-    for i, sec in enumerate(report.sections):
-        print(f"  {i+1}. {sec.title} ({len(sec.citations)} citations)")
+    for i, sec in enumerate(report.get("sections", [])):
+        print(f"  {i+1}. {sec['title']} ({len(sec.get('citations', []))} citations)")
 
     # Collect all papers
     papers_by_year = {}
-    for sec in report.sections:
-        for cit in sec.citations:
-            year = cit.paper.year
-            cid = str(cit.paper.corpus_id)
+    for sec in report.get("sections", []):
+        for cit in sec.get("citations", []):
+            year = cit.get("paper", {}).get("year")
+            cid = str(cit.get("paper", {}).get("corpus_id"))
             if year not in papers_by_year:
                 papers_by_year[year] = set()
             papers_by_year[year].add(cid)

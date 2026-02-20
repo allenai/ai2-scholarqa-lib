@@ -1,14 +1,14 @@
 import logging
 import re
 from time import time
-from typing import List, Any, Dict, Tuple, Optional
+from typing import List, Any, Dict, Tuple, Optional, Union
 
 import pandas as pd
 from langsmith import traceable
 
 from scholarqa.llms.constants import CostAwareLLMResult
 from scholarqa.llms.litellm_helper import CostReportingArgs
-from scholarqa.models import GeneratedSection, TaskResult, ToolRequest, ReportEditRequest
+from scholarqa.models import TaskResult, ToolRequest, ReportEditRequest
 from scholarqa.postprocess.json_output_utils import get_json_summary
 from scholarqa.preprocess.query_preprocessor import LLMProcessedQuery
 from scholarqa.preprocess.edit_intent_analyzer import analyze_edit_intent, EditIntentAnalysis
@@ -40,23 +40,23 @@ class EditPipelineRunner(ScholarQA):
         )
 
     @traceable(name="Edit: Retrieve current report from thread")
-    def retrieve_report_from_thread(self, thread_id: str) -> TaskResult:
+    def retrieve_report_from_thread(self, thread_id: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve the current report from the state manager using thread_id.
+        Retrieve the current report JSON from the state manager using thread_id.
 
-        Args:
-            thread_id: The thread ID containing the report
+        Returns the raw dict (matching the summary JSON format) to avoid
+        unnecessary TaskResult conversion — KEEP sections reuse dict sections directly.
 
         Returns:
-            TaskResult object or None if not found
+            Report dict with 'sections', 'report_title', etc. or None if not found
         """
         try:
             state = self.state_mgr.read_state(thread_id)
             if state and state.task_result:
                 if isinstance(state.task_result, TaskResult):
-                    return state.task_result
+                    return state.task_result.model_dump()
                 elif isinstance(state.task_result, dict):
-                    return TaskResult(**state.task_result)
+                    return state.task_result
             return None
         except Exception as e:
             logger.error(f"Error retrieving report for thread {thread_id}: {e}")
@@ -428,25 +428,6 @@ class EditPipelineRunner(ScholarQA):
 
         return return_val
 
-    @staticmethod
-    def _section_to_json(section: GeneratedSection) -> Dict[str, Any]:
-        """Convert an existing GeneratedSection to the json_summary dict format for KEEP sections."""
-        return {
-            "title": section.title,
-            "tldr": section.tldr,
-            "text": section.text,
-            "citations": [
-                {
-                    "id": c.id,
-                    "paper": c.paper.model_dump(),
-                    "snippets": c.snippets,
-                    "score": c.score,
-                }
-                for c in (section.citations or [])
-            ],
-           "table": section.table.to_dict() if section.table else None,
-        }
-
     @traceable(run_type="tool", name="ai2_scholar_qa_edit_trace")
     def run_edit_pipeline(
             self,
@@ -501,15 +482,17 @@ class EditPipelineRunner(ScholarQA):
         # ====================================================================
         self.update_task_state("Retrieving current report", step_estimated_time=2)
         current_report = self.retrieve_report_from_thread(req.thread_id)
+        req.query = req.query if req.query else (current_report.get("query") if current_report else "")
         if not current_report:
             raise ValueError(f"No report found for thread_id: {req.thread_id}")
 
+        report_sections = current_report.get("sections", [])
+        report_title = current_report.get("report_title", "")
         logger.info(
-            f"Retrieved report with {len(current_report.sections)} sections: "
-            f"{current_report.report_title}"
+            f"Retrieved report with {len(report_sections)} sections: {report_title}"
         )
 
-        self.report_title = current_report.report_title
+        self.report_title = report_title
 
         # Initialize event trace
         event_trace = EventTrace(
@@ -678,12 +661,10 @@ class EditPipelineRunner(ScholarQA):
         # and merge into per_paper_summaries_extd / paper_metadata for
         # get_json_summary() resolution. New quotes take priority for duplicates.
         # ====================================================================
-        for section in current_report.sections:
-            if not section.citations:
-                continue
-            for cit in section.citations:
+        for section in report_sections:
+            for cit in section.get("citations", []):
                 ref_key, per_paper_entry, paper_meta_entry = self.edit_pipeline.citation_to_ref_data(cit)
-                corpus_id_str = str(cit.paper.corpus_id)
+                corpus_id_str = str(cit["paper"]["corpus_id"])
                 if ref_key not in per_paper_summaries_extd:
                     per_paper_summaries_extd[ref_key] = per_paper_entry
                 if corpus_id_str not in paper_metadata:
@@ -715,7 +696,7 @@ class EditPipelineRunner(ScholarQA):
         json_summary, generated_sections, table_threads = [], [], []
         tables = [None for _ in plan_dimensions]
         citation_ids = dict()
-        current_sections_map = {section.title: section for section in current_report.sections}
+        current_sections_map = {s["title"]: s for s in report_sections}
 
         for idx, dim in enumerate(plan_dimensions):
             section_result = next(gen_sections_iter)
@@ -733,10 +714,9 @@ class EditPipelineRunner(ScholarQA):
                 step_estimated_time=15
             )
 
-            # KEEP: generator yielded None (content of noop), reuse existing GeneratedSection
+            # KEEP: generator yielded None (content of noop), reuse existing section dict directly
             if action == EditAction.KEEP and section_name in current_sections_map:
-                existing_section = current_sections_map[section_name]
-                section_json = self._section_to_json(existing_section)
+                section_json = current_sections_map[section_name]
             else:
                 section_json = get_json_summary(
                     self.llm_model,

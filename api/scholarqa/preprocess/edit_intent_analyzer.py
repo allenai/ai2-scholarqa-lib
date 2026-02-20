@@ -6,12 +6,12 @@ Similar to query_preprocessor.py but specialized for edit operations.
 
 import json
 import logging
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any
 
 from pydantic import BaseModel, Field, field_validator
 
 from scholarqa.llms.litellm_helper import llm_completion
-from scholarqa.models import TaskResult, ToolRequest, ReportEditRequest
+from scholarqa.models import ReportEditRequest
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,8 @@ class EditIntentAnalysis(BaseModel):
     # Paper operations (non-empty = that operation is requested)
     # NOTE: papers_to_remove should contain RESOLVED corpus_ids from constraint-based removal
     papers_to_add: List[str] = Field(default=[], description="corpus_ids to add to the report")
-    papers_to_remove: List[str] = Field(default=[], description="corpus_ids to remove from the report (resolved from constraints)")
+    papers_to_remove: List[str] = Field(default=[],
+                                        description="corpus_ids to remove from the report (resolved from constraints)")
 
     # Section targeting
     target_sections: List[str] = Field(default=[], description="Specific section titles mentioned in instruction")
@@ -126,32 +127,31 @@ class EditIntentAnalysis(BaseModel):
         return filters
 
 
-def _format_citations_for_prompt(current_report: TaskResult) -> str:
+def _format_citations_for_prompt(current_report: Dict[str, Any]) -> str:
     """
-    Format all citations from the current report for the intent analyzer prompt.
+    Format all citations from the current report dict for the intent analyzer prompt.
     This allows the LLM to resolve constraint-based removal to actual corpus_ids.
     """
     citations_list = []
     seen_corpus_ids = set()
 
-    for section in current_report.sections:
-        if not section.citations:
-            continue
-        for citation in section.citations:
-            corpus_id = str(citation.paper.corpus_id)
+    for section in current_report.get("sections", []):
+        for citation in section.get("citations", []):
+            paper = citation.get("paper", {})
+            corpus_id = str(paper.get("corpus_id", ""))
             if corpus_id in seen_corpus_ids:
                 continue
             seen_corpus_ids.add(corpus_id)
 
-            # Format citation info for LLM to evaluate constraints
+            authors = paper.get("authors") or []
             citation_info = {
                 "corpus_id": corpus_id,
-                "title": citation.paper.title,
-                "year": citation.paper.year,
-                "venue": citation.paper.venue,
-                "authors": [a.name for a in citation.paper.authors] if citation.paper.authors else [],
-                "citations": citation.paper.n_citations,
-                "section": section.title
+                "title": paper.get("title", ""),
+                "year": paper.get("year", 0),
+                "venue": paper.get("venue", ""),
+                "authors": [a["name"] if isinstance(a, dict) else a.name for a in authors],
+                "citations": paper.get("n_citations", 0),
+                "section": section.get("title", "")
             }
             citations_list.append(citation_info)
 
@@ -161,11 +161,10 @@ def _format_citations_for_prompt(current_report: TaskResult) -> str:
     return json.dumps(citations_list, indent=2)
 
 
-
 def analyze_edit_intent(
         req: ReportEditRequest,
         report_context: str,
-        current_report: TaskResult,
+        current_report: Dict[str, Any],
         llm_model: str,
         fallback_llm: str = None,
         **llm_kwargs

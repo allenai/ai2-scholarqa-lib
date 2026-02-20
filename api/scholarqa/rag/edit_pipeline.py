@@ -27,7 +27,6 @@ from scholarqa.llms.edit.prompts import (
     PROMPT_ASSEMBLE_NO_QUOTES_SUMMARY_EDIT,
 )
 from scholarqa.llms.litellm_helper import batch_llm_completion, llm_completion
-from scholarqa.models import TaskResult, CitationSrc
 from scholarqa.rag.multi_step_qa_pipeline import Dimension, ClusterPlan
 from scholarqa.utils import get_ref_author_str, make_int
 
@@ -249,7 +248,7 @@ class EditPipeline:
     def generate_iterative_summary_edit(
         self,
         edit_instruction: str,
-        current_report: TaskResult,
+        current_report: Dict[str, Any],
         per_paper_summaries_extd: Dict[str, Dict[str, Any]],
         plan: List[Dict[str, Any]],
         papers_to_remove: List[str] = None,
@@ -261,7 +260,7 @@ class EditPipeline:
 
         Args:
             edit_instruction: The user's edit instruction
-            current_report: The current report being edited
+            current_report: The current report dict being edited
             per_paper_summaries_extd: Extended quotes with inline citations
                 (includes both new papers and existing citations merged by the runner)
             plan: Edit plan dimensions list with actions
@@ -281,10 +280,10 @@ class EditPipeline:
             for ref_string, response in per_paper_summaries_extd.items()
         ]
 
-        # Build map from section name to current section content
+        # Build map from section name to current section dict
         current_sections_map = {
-            section.title: section
-            for section in current_report.sections
+            section["title"]: section
+            for section in current_report.get("sections", [])
         }
 
         # Extract plan structure (same format as original but with actions)
@@ -313,16 +312,16 @@ class EditPipeline:
 
             current_section_content = ""
             if current_section:
-                current_section_content = f"{current_section.title}\n\n"
-                if current_section.tldr:
-                    current_section_content += f"TLDR: {current_section.tldr}\n"
-                current_section_content += current_section.text
+                current_section_content = f"{current_section['title']}\n\n"
+                if current_section.get("tldr"):
+                    current_section_content += f"TLDR: {current_section['tldr']}\n"
+                current_section_content += current_section.get("text", "")
 
-            # KEEP: yield noop, runner reuses existing GeneratedSection
+            # KEEP: yield noop, runner reuses existing section dict directly
             if action == EditAction.KEEP and current_section:
                 logger.info(f"Keeping section unchanged: {section_name}")
                 yield _NOOP_COMPLETION
-                existing_sections.append(current_section.text)
+                existing_sections.append(current_section.get("text", ""))
                 continue
 
             # Build new quotes for this section (from search/quote extraction)
@@ -339,8 +338,8 @@ class EditPipeline:
             # Build existing citations for REWRITE by looking up per_paper_summaries_extd
             # (existing citations were merged into it by the runner in Step 4.5)
             existing_citations_str = ""
-            if current_section and current_section.citations and action == EditAction.REWRITE:
-                for cit in current_section.citations:
+            if current_section and current_section.get("citations") and action == EditAction.REWRITE:
+                for cit in current_section["citations"]:
                     ref_key = self.citation_ref_key(cit)
                     if ref_key in per_paper_summaries_extd:
                         existing_citations_str += f"{ref_key}: {per_paper_summaries_extd[ref_key]}\n"
@@ -385,58 +384,61 @@ class EditPipeline:
     # ========================================================================
 
     @staticmethod
-    def format_report_context(report: TaskResult) -> str:
-        """Format full report for edit prompts (intent analysis, quote extraction, clustering)."""
+    def format_report_context(report: Dict[str, Any]) -> str:
+        """Format report dict for edit prompts (intent analysis, quote extraction, clustering)."""
         lines = []
-        if report.report_title:
-            lines.append(f"Title: {report.report_title}\n")
+        title = report.get("report_title", "")
+        if title:
+            lines.append(f"Title: {title}\n")
 
         lines.append("Sections:")
-        for i, section in enumerate(report.sections):
-            lines.append(f"\n{i+1}. {section.title} ({'synthesis' if section.table is None else 'list'})")
-            if section.tldr:
-                lines.append(f"   TLDR: {section.tldr}")
-            # Include snippet of text
-            text_preview = section.text[:300] + "..." if len(section.text) > 300 else section.text
+        for i, section in enumerate(report.get("sections", [])):
+            fmt = "synthesis" if section.get("table") is None else "list"
+            lines.append(f"\n{i+1}. {section['title']} ({fmt})")
+            if section.get("tldr"):
+                lines.append(f"   TLDR: {section['tldr']}")
+            text = section.get("text", "")
+            text_preview = text[:300] + "..." if len(text) > 300 else text
             lines.append(f"   Content preview: {text_preview}")
-            lines.append(f"   Papers cited: {len(section.citations)}")
+            lines.append(f"   Papers cited: {len(section.get('citations', []))}")
 
         return "\n".join(lines)
 
     @staticmethod
-    def citation_ref_key(citation: CitationSrc) -> str:
-        """Generate the [ID | Author | Year | Citations: N] reference key for a CitationSrc."""
-        paper = citation.paper
-        authors_dicts = [{"name": a.name, "authorId": a.authorId} for a in (paper.authors or [])]
+    def citation_ref_key(citation: Dict[str, Any]) -> str:
+        """Generate the [ID | Author | Year | Citations: N] reference key for a citation dict."""
+        paper = citation["paper"]
+        authors = paper.get("authors") or []
         return anyascii(
-            f"[{make_int(paper.corpus_id)} | {get_ref_author_str(authors_dicts)} | "
-            f"{make_int(paper.year)} | Citations: {make_int(paper.n_citations or 0)}]"
+            f"[{make_int(paper['corpus_id'])} | {get_ref_author_str(authors)} | "
+            f"{make_int(paper.get('year', 0))} | Citations: {make_int(paper.get('n_citations', 0) or 0)}]"
         )
 
     @staticmethod
-    def citation_to_ref_data(citation: CitationSrc) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
+    def citation_to_ref_data(citation: Dict[str, Any]) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
         """
-        Convert a CitationSrc into ref_key, per_paper_summaries entry, and paper_metadata entry.
+        Convert a citation dict into ref_key, per_paper_summaries entry, and paper_metadata entry.
 
-        Called once per citation in the runner to build existing_paper_summaries.
+        Called once per citation in the runner to merge existing citations.
         """
         ref_key = EditPipeline.citation_ref_key(citation)
-        paper = citation.paper
-        authors_dicts = [{"name": a.name, "authorId": a.authorId} for a in (paper.authors or [])]
+        paper = citation["paper"]
+        authors = paper.get("authors") or []
+        snippets = citation.get("snippets") or []
 
         per_paper_entry = {
-            "quote": "...".join(citation.snippets) if citation.snippets else "",
+            "quote": "...".join(snippets),
             "inline_citations": {},
         }
 
         paper_meta_entry = {
-            "corpusId": make_int(paper.corpus_id),
-            "title": paper.title,
-            "year": make_int(paper.year),
-            "authors": authors_dicts,
-            "venue": paper.venue or "",
-            "citationCount": make_int(paper.n_citations or 0),
-            "relevance_judgement": citation.score or 0,
+            "corpusId": make_int(paper["corpus_id"]),
+            "title": paper.get("title", ""),
+            "year": make_int(paper.get("year", 0)),
+            "authors": authors,
+            "venue": paper.get("venue", ""),
+            "citationCount": make_int(paper.get("n_citations", 0) or 0),
+            "relevance_judgement": citation.get("score", 0),
         }
 
         return ref_key, per_paper_entry, paper_meta_entry
