@@ -54,12 +54,12 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
             title = re.sub(r"\s*\(synthesis\)", "", title)
             curr_section["title"] = title.strip('#').strip()
             if tldr_token is not None:
-                text_parts = parts[1].strip().split("\n", 1)
-                tldr = text_parts[0]  # Assume TLDR is a single line
-                text = text_parts[1] if len(text_parts) > 1 else ""
-                # Discard any duplicate TLDR lines from the body text
-                while text.lstrip().startswith(tldr_token):
-                    text = text.lstrip().split("\n", 1)[1] if "\n" in text.lstrip() else ""
+                # Everything after the first TLDR token, split into lines
+                lines = parts[1].strip().split("\n")
+                # First line is the TLDR summary
+                tldr = lines[0]
+                # Remaining lines become body text; discard any duplicate TLDR lines
+                text = "\n".join(line for line in lines[1:] if not line.lstrip().startswith(tldr_token))
                 if not text:
                     logger.warning(
                         "TLDR line has no body text following it (possible duplicate TLDR). "
