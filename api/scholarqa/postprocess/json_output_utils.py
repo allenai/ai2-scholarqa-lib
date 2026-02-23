@@ -37,16 +37,7 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
     if tldr_token is not None:
         parts = gen_text.split(tldr_token, 1)
     else:
-        # No TLDR token found — fall back to first line as title, rest as text
-        line_parts = gen_text.strip().split("\n", 1)
-        if len(line_parts) > 1:
-            logger.warning(
-                "No TLDR token found in section (LLM may have garbled it). "
-                "Falling back to title + text only. First 100 chars: %s", gen_text[:100]
-            )
-            parts = line_parts
-        else:
-            parts = [gen_text]
+        parts = [gen_text]
     try:
         if len(parts) > 1:
             title = parts[0].strip()

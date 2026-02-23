@@ -81,18 +81,6 @@ class TestGetSectionTextTldrCitations:
         assert "RTS,S" in section["tldr"]
         assert section["text"].strip() == ""
 
-    def test_garbled_tldr_token(self):
-        """Garbled TLDR token should fall back to title + text."""
-        gen_text = (
-            "Future Directions and Emerging Trends\n"
-            "TLations; As information environments continue to evolve, the relationship "
-            "between Information Foraging Theory and Exploratory Search will likely expand "
-            "to address new forms of information seeking behavior and technological affordances."
-        )
-        section = get_section_text(gen_text)
-        assert section["title"] == "Future Directions and Emerging Trends"
-        assert "tldr" not in section
-        assert "information environments" in section["text"]
 
 
 class TestGetJsonSummaryErrorHandling:
