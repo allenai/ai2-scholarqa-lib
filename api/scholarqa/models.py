@@ -36,6 +36,18 @@ class ToolRequest(BaseModel):
     user_id: Optional[str] = Field(default=None, description="The user id of the user who posed the query")
 
 
+class SnippetBasedRequest(BaseModel):
+    query: str = Field(description="The scientific query for reranking and synthesis")
+    snippets: List[Dict[str, Any]] = Field(description="List of 200-1000 pre-retrieved snippet-level records")
+    paper_metadata: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default={},
+        description="Optional paper metadata dict mapping corpus_id to metadata"
+    )
+    user_id: Optional[str] = Field(default=None, description="The user id of the user who posed the query")
+    opt_in: Optional[bool] = Field(default=True, description="Flag to indicate whether to include the query and response in public release")
+    n_rerank: Optional[int] = Field(default=50, description="Number of top papers to keep after reranking")
+
+
 class CitationSrc(BaseModel):
     id: str = Field(default=None, description=(
         "The id of the citation which is of the format (index, author_ref_string, year)"
