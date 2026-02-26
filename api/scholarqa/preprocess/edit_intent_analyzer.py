@@ -231,9 +231,7 @@ def analyze_edit_intent(
         analysis = EditIntentAnalysis(**result)
 
         logger.info(
-            f"Intent analysis complete: needs_search={analysis.needs_search}, "
-            f"is_addition={analysis.is_addition}, is_removal={analysis.is_removal}, "
-            f"is_stylistic={analysis.is_stylistic}"
+            f"Intent analysis complete"
         )
 
         # Validate: if corpus_ids were provided by user and this is an addition, include them

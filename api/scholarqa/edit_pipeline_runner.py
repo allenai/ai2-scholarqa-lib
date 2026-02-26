@@ -81,7 +81,6 @@ class EditPipelineRunner(ScholarQA):
         Returns:
             EditIntentAnalysis with search query, constraints, and operation details
         """
-        logger.info("Analyzing edit intent...")
         self.update_task_state("Analyzing edit instruction", step_estimated_time=3)
 
         return analyze_edit_intent(
@@ -713,11 +712,16 @@ class EditPipelineRunner(ScholarQA):
 
             # DELETE: generator yielded None (content of noop), skip entirely
             if action == EditAction.DELETE:
+                self.update_task_state(
+                    f"Section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
+                    curr_response=generated_sections,
+                    step_estimated_time=15
+                )
                 continue
 
             # REWRITE/NEW: section_result is a string (response.content from call_iter_method)
             self.update_task_state(
-                f"Editing section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
+                f"Section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
                 curr_response=generated_sections,
                 step_estimated_time=15
             )
