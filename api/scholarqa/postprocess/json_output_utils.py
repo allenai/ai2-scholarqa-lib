@@ -35,7 +35,7 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
     tldr_token = find_tldr_super_token(gen_text)
     curr_section = dict()
     if tldr_token is not None:
-        parts = gen_text.split(tldr_token)
+        parts = gen_text.split(tldr_token, 1)
     else:
         parts = [gen_text]
     try:
@@ -45,9 +45,17 @@ def get_section_text(gen_text: str) -> Dict[str, Any]:
             title = re.sub(r"\s*\(synthesis\)", "", title)
             curr_section["title"] = title.strip('#').strip()
             if tldr_token is not None:
-                text_parts = parts[1].strip().split("\n", 1)
-                tldr = text_parts[0]  # Assume TLDR is a single line
-                text = text_parts[1]
+                # Everything after the first TLDR token, split into lines
+                lines = parts[1].strip().split("\n")
+                # First line is the TLDR summary
+                tldr = lines[0]
+                # Remaining lines become body text; discard any duplicate TLDR lines
+                text = "\n".join(line for line in lines[1:] if not line.lstrip().startswith(tldr_token))
+                if not text:
+                    logger.warning(
+                        "TLDR line has no body text following it (possible duplicate TLDR). "
+                        "Title: %s, TLDR: %s", curr_section.get("title", ""), tldr[:100]
+                    )
                 curr_section["tldr"] = tldr.strip('#').strip()
             else:
                 text = parts[1].strip()
@@ -119,7 +127,11 @@ def get_json_summary(llm_model: str, summary_sections: List[str], summary_quotes
     inline_citation_quotes = {anyascii(k): v for incite in summary_quotes.values() for k, v in
                               incite["inline_citations"].items()}
     for sec in summary_sections:
-        curr_section = get_section_text(sec)
+        try:
+            curr_section = get_section_text(sec)
+        except Exception:
+            logger.warning("Skipping unparseable section. First 200 chars: %s", sec[:200])
+            continue
         if "tldr" in curr_section and curr_section["tldr"]:
             curr_section["tldr"] = re.sub(r"[ ]+", " ", _CITATION_RE.sub("", curr_section["tldr"])).strip()
         text = curr_section["text"]
