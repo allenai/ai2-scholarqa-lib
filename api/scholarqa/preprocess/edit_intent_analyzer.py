@@ -151,7 +151,8 @@ def _format_citations_for_prompt(current_report: Dict[str, Any]) -> str:
                 "venue": paper.get("venue", ""),
                 "authors": [a["name"] if isinstance(a, dict) else a.name for a in authors],
                 "citations": paper.get("n_citations", 0),
-                "section": section.get("title", "")
+                "section": section.get("title", ""),
+                "relevance_score": paper.get("score", 0)
             }
             citations_list.append(citation_info)
 

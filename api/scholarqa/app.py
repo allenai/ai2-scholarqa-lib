@@ -89,13 +89,9 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     to write back.
     """
     # Route to appropriate pipeline based on request type
-    if isinstance(tool_request, ReportEditRequest):
-        logger.info(f"Routing to edit pipeline for thread {tool_request.thread_id}")
-        runner = app_config.load_scholarqa(task_id, tool_request, sqa_class=EditPipelineRunner)
-        return runner.run_edit_pipeline(tool_request)
-    else:
-        scholar_qa = app_config.load_scholarqa(task_id, tool_request)
-        return scholar_qa.run_qa_pipeline(tool_request)
+    scholar_qa = app_config.load_scholarqa(task_id, tool_request)
+    sqa_callable = scholar_qa.run_edit_pipeline if isinstance(scholar_qa, EditPipelineRunner) else scholar_qa.run_qa_pipeline
+    return sqa_callable(tool_request)
 
 
 def _estimate_task_length(tool_request: ToolRequest) -> str:

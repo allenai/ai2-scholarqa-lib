@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from time import time
@@ -32,8 +33,8 @@ class EditPipelineRunner(ScholarQA):
     - Edit-aware quote extraction, clustering, and section generation
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         fallback_llm = kwargs.get("fallback_llm", None)
         self.edit_pipeline = EditPipeline(
             self.llm_model, fallback_llm=fallback_llm, **self.llm_kwargs
@@ -468,8 +469,8 @@ class EditPipelineRunner(ScholarQA):
             raise ValueError("thread_id is required to fetch the current report")
 
         task_id = self.task_id if self.task_id else req.task_id
-        user_id = req.user_id
-        msg_id = task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
         edit_instruction = req.intent
 
         logger.info(
@@ -524,13 +525,7 @@ class EditPipelineRunner(ScholarQA):
             current_report=current_report,
         )
 
-        logger.info(
-            f"Intent analysis: needs_search={intent_analysis.needs_search}, "
-            f"is_addition={intent_analysis.is_addition}, is_removal={intent_analysis.is_removal}, "
-            f"is_stylistic={intent_analysis.is_stylistic}, "
-            f"papers_to_add={len(intent_analysis.papers_to_add)}, "
-            f"papers_to_remove={len(intent_analysis.papers_to_remove)}"
-        )
+        logger.info(f"Intent analysis output: {intent_analysis.model_dump_json()}")
 
         # ====================================================================
         # STEP 1: Search and Rerank (CONDITIONAL, based on intent analysis)
@@ -620,6 +615,7 @@ class EditPipelineRunner(ScholarQA):
             cost_args=cost_args,
         )
         cluster_json_result = cluster_result.result
+        logger.info(f"Clustering/planning output: {json.dumps(cluster_json_result)}")
         event_trace.trace_clustering_event(cluster_result, {})
 
         if cluster_json_result.get("report_title"):
@@ -627,7 +623,7 @@ class EditPipelineRunner(ScholarQA):
 
         plan_dimensions = cluster_json_result["dimensions"]
         plan_json = {
-            f'{dim["name"]} ({dim["format"]})': {"action": dim["action"], "quotes": dim.get("quotes", [])}
+            f'{dim["name"]} ({dim["format"]})': dim.get("quotes", [])
             for dim in plan_dimensions
         }
 
@@ -658,8 +654,8 @@ class EditPipelineRunner(ScholarQA):
 
         # ====================================================================
         # STEP 4.5: Build existing_paper_summaries from current report citations
-        # and merge into per_paper_summaries_extd / paper_metadata for
-        # get_json_summary() resolution. New quotes take priority for duplicates.
+        # and merge into per_paper_summaries_extd / paper_metadata / quotes_metadata
+        # for get_json_summary() resolution. New quotes take priority for duplicates.
         # ====================================================================
         for section in report_sections:
             for cit in section.get("citations", []):
@@ -669,6 +665,18 @@ class EditPipelineRunner(ScholarQA):
                     per_paper_summaries_extd[ref_key] = per_paper_entry
                 if corpus_id_str not in paper_metadata:
                     paper_metadata[corpus_id_str] = paper_meta_entry
+                snippet_meta = cit.get("snippetMetadata") or cit.get("snippet_metadata")
+                if snippet_meta and ref_key not in quotes_metadata:
+                    quotes_metadata[ref_key] = [
+                        {
+                            "quote": sm.get("quote", ""),
+                            "section_title": sm.get("sectionTitle", sm.get("section_title", "")),
+                            "pdf_hash": sm.get("pdfHash", sm.get("pdf_hash", "")),
+                            "sentence_offsets": sm.get("sentenceOffsets", sm.get("sentence_offsets", [])),
+                            "ref_mentions": sm.get("refMentions", sm.get("ref_mentions", [])),
+                        }
+                        for sm in snippet_meta
+                    ]
 
         # ====================================================================
         # STEP 5: Section Generation/Editing (EDIT-SPECIFIC)
@@ -731,7 +739,12 @@ class EditPipelineRunner(ScholarQA):
             json_summary.append(section_json)
             self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
 
-            if section_json["format"] == "list" and section_json["citations"] and self.run_table_generation:
+            existing_section = current_sections_map.get(section_name)
+            existing_format = "synthesis" if not existing_section or existing_section.get("table") is None else "list"
+            format_changed = dim["format"] != existing_format
+            section_edited = action in (EditAction.REWRITE, EditAction.NEW)
+            if section_json["format"] == "list" and section_json["citations"] and self.run_table_generation \
+                    and (section_edited or format_changed):
                 dim["idx"] = idx
                 cit_ids = [int(c["paper"]["corpus_id"]) for c in section_json["citations"]]
                 tthread = self.gen_table_thread(user_id, edit_instruction, dim, cit_ids, tables)

@@ -103,6 +103,7 @@ def pop_ref_data(ref_str_id, ref_corpus_id, fixed_quote, curr_paper_metadata) ->
         curr_ref["paper"]["year"] = make_int(curr_paper_metadata.get("year", 0))
         curr_ref["paper"]["venue"] = curr_paper_metadata["venue"]
         curr_ref["paper"]["n_citations"] = curr_paper_metadata["citationCount"]
+        curr_ref["paper"]["score"] = curr_paper_metadata.get("relevance_judgement", 0)
     return curr_ref
 
 

@@ -20,6 +20,7 @@ class PaperDetails(BaseModel):
     n_citations: Optional[int] = Field(default=0, description=(
         "The number of times the source paper has been cited"
     ))
+    score: float = Field(default=0.0, description=("Relevance score of the snippet for the query"))
 
 class ToolRequest(BaseModel):
     task_id: Optional[str] = Field(default=None, description=(
@@ -60,7 +61,7 @@ class CitationSrc(BaseModel):
     snippets: Optional[List[str]] = Field(default=[], description=(
         "A list of all the relevant snippets from the cited paper"
     ))
-    score: float = Field(description=("Relevance score of the snippet for the query"))
+    score: float = Field(default=0.0, description=("Relevance score of the snippet for the query"))
     snippet_metadata: Optional[List[Dict[str, Any]]] = Field(default=None, description=(
         "Metadata for each snippet such as section name"
     ))

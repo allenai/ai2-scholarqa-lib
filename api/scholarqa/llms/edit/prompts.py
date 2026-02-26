@@ -245,6 +245,7 @@ For sections marked KEEP, the quotes list should be empty.
 For sections marked REWRITE that incorporate new content, include the relevant quote indices.
 You can also create NEW sections that weren't in the original report, but only if indicated in the instruction or intent.
 If a section has to be replaced, use DELETE for the old one and NEW for the new one, rather than REWRITE, while maintaining order.
+Think hard if a section with REWRITE or NEW action can lead to changes in subsequent sections (e.g., due to paper removals), you can mark those subsequent sections for REWRITE as well to ensure coherence.
 
 **PAPER REMOVAL**:
 When papers need to be removed (based on intent_analysis or edit instruction):
@@ -287,7 +288,7 @@ IMPORTANT: Output sections in the desired final order (clustering handles reorde
 Output format:
 {{{{
 "cot": "Reasoning for how to edit each section based on the instruction, quotes, and intent analysis...",
-"report_title": "Keep existing title or provide updated title if instruction requires it",
+"report_title": "Generate a new title for the report based on combination of the original report, edit instruction, and any new themes from the quotes. Keep it concise.",
 "papers_to_remove": ["corpus_id_1", "corpus_id_2"],
 "dimensions": [
   {{{{"name": "Existing Section Name", "format": "synthesis or list", "quotes": [quote indices], "action": "KEEP or REWRITE or DELETE"}}}},
@@ -340,8 +341,9 @@ Here is the overall plan for the edited report:
 
 I will provide you with the name of one section from the plan at a time, along with:
 1. The CURRENT content of that section (if it exists)
-2. The ACTION to take (KEEP, REWRITE, DELETE, or NEW)
-3. The list of new quoted references to incorporate (if applicable)
+2. The ACTION to take (REWRITE, or NEW)
+3. The list of existing quoted references already in that section (if applicable)
+4. The list of new quoted references to incorporate (if applicable)
 
 Your job is to help me write or edit this section according to the action.
 
@@ -374,26 +376,23 @@ Here are the EXISTING citations already present in the current version of this s
 </existing_section_references>
 
 <action-specific instructions>
-**If action is KEEP**: Return the current section content exactly as-is.
-
 **If action is REWRITE**: Rewrite the section content according to the edit instruction. You have two sets of references:
 - section_references: NEW papers from search to incorporate
 - existing_section_references: papers ALREADY cited in this section
 If papers_to_remove lists corpus IDs, match them to existing_section_references by their ID and do NOT cite those papers. Retain all other existing citations where relevant, and integrate new references naturally. This covers all modifications: adding new papers, removing papers, stylistic rewrites, and restructuring.
 
 **If action is NEW**: Write a brand new section based on the new references provided.
-
-**If action is DELETE**: (You won't see this - deleted sections are skipped)
 </action-specific instructions>
 
 <citation instructions>
 - Each reference (both new and existing) is a key value pair, where the key is a pipe separated string enclosed in square brackets representing [ID | AUTHOR_REF | YEAR | Citations: CITES].
+- You can use the key to filter or retain papers based on metadata as specified in the edit instruction.
 
 The value consists of the quote and sometimes a dictionary of inline citations referenced in that quote
 eg. "[2345677 | Doe, Moe et al. | 2024 | Citations: 25]": {{"quote": "This is the reference text.", "inline citations": {{"[4517277 | Hero et al. | 2019 | Citations: 250]": "This is an inline citation."}}}}
 
 - Please write or edit this section, making sure to cite the relevant references inline using the corresponding reference key in the format: [ID | AUTHOR_REF | YEAR | Citations: CITES]. You may use more than one reference key in a row if it's appropriate.
-
+- Think carefully when parsing papers_to_remove. The edit instruction might specify removing only from particular sections or by certain constraints. Make sure to only exclude papers that match those criteria.
 - For REWRITE actions: Use new references from section_references plus existing references from existing_section_references. If a paper appears in both, prefer the new version. Integrate naturally.
 
 - For NEW actions: Use only the new references provided.
@@ -421,8 +420,8 @@ The section should have the following characteristics:
 - Some references are older. Something that claims to be "state of the art" but is from 2020 may not be any more. Please avoid making such claims.
 - Be concise.
 - The section you write must be coherent with already_written sections and address the edit instruction.
-- For REWRITE: Maintain consistency with the existing report style.
-- For NEW: Match the style of the overall report.
+- For REWRITE: Maintain consistency with the existing report style. Make minimal changes to the content and structure unless the edit instruction requires otherwise. Integrate new references in a way that flows with the existing text.
+- For NEW: Match the style of the overall report and the content that has already been generated.
 - Multiple references may express the same idea. If so, you can cite multiple references in a single sentence.
 - Do not make the same points that were made in the previous already written sections.
 </writing instructions>
