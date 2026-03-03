@@ -706,7 +706,6 @@ class EditPipelineRunner(ScholarQA):
         current_sections_map = {s["title"]: s for s in report_sections}
 
         for idx, dim in enumerate(plan_dimensions):
-            section_result = next(gen_sections_iter)
             action = dim.get("action", EditAction.NEW)
             section_name = dim["name"]
 
@@ -717,15 +716,17 @@ class EditPipelineRunner(ScholarQA):
                     curr_response=generated_sections,
                     step_estimated_time=15
                 )
+
+            else:
+                # REWRITE/NEW: section_result is a string (response.content from call_iter_method)
+                self.update_task_state(
+                    f"Section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
+                    curr_response=generated_sections,
+                    step_estimated_time=15
+                )
+            section_result = next(gen_sections_iter)
+            if action == EditAction.DELETE:
                 continue
-
-            # REWRITE/NEW: section_result is a string (response.content from call_iter_method)
-            self.update_task_state(
-                f"Section {idx + 1} of {len(plan_dimensions)}: {section_titles[idx]} ({action})",
-                curr_response=generated_sections,
-                step_estimated_time=15
-            )
-
             # KEEP: generator yielded None (content of noop), reuse existing section dict directly
             if action == EditAction.KEEP and section_name in current_sections_map:
                 section_json = current_sections_map[section_name]

@@ -428,6 +428,7 @@ class EditPipeline:
 
         per_paper_entry = {
             "quote": "...".join(snippets),
+            "inline_citations": {},
         }
 
         paper_meta_entry = {
