@@ -37,8 +37,15 @@ class ToolRequest(BaseModel):
 
 
 class SnippetBasedRequest(BaseModel):
+    task_id: Optional[str] = Field(
+        default=None,
+        description="Task ID for polling status. Provide to check status of existing task."
+    )
     query: str = Field(description="The scientific query for reranking and synthesis")
-    snippets: List[Dict[str, Any]] = Field(description="List of 200-1000 pre-retrieved snippet-level records")
+    snippets: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="List of 200-1000 pre-retrieved snippet-level records (required for new tasks)"
+    )
     paper_metadata: Optional[Dict[str, Dict[str, Any]]] = Field(
         default={},
         description="Optional paper metadata dict mapping corpus_id to metadata"

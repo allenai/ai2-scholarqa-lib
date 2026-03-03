@@ -3,7 +3,7 @@ import os
 import re
 from threading import Thread
 from time import time
-from typing import List, Any, Dict, Tuple, Generator
+from typing import List, Any, Dict, Tuple, Generator, Optional
 from uuid import uuid4
 
 import pandas as pd
@@ -714,6 +714,145 @@ class ScholarQA:
         )
 
         # Finalization: postprocess, trace, and persist
+        self.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
+        event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
+        event_trace.persist_trace(self.logs_config)
+
+        return TaskResult(
+            report_title=report_data.report_title,
+            sections=report_data.sections,
+            cost=event_trace.total_cost,
+            tokens=event_trace.tokens
+        )
+
+
+class ScholarQASnippetBased(ScholarQA):
+    """
+    ScholarQA variant for processing pre-retrieved snippets.
+
+    This class skips query preprocessing and retrieval steps, accepting
+    snippets directly from the client. It performs reranking and synthesis
+    using the same pipeline as the base ScholarQA class.
+
+    Use case: Custom corpus search, hybrid retrieval, pre-filtered results
+    """
+
+    @traceable(run_type="tool", name="ai2_scholar_qa_snippet_based_trace")
+    def run_snippet_based_pipeline(
+        self,
+        req: ToolRequest,
+        snippets: List[Dict[str, Any]],
+        paper_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
+        inline_tags: bool = False
+    ) -> TaskResult:
+        """
+        Process pre-retrieved snippets through reranking and synthesis pipeline.
+
+        This method skips:
+        - Query validation for harmful content
+        - Query decomposition
+        - Retrieval from Vespa index
+        - Additional S2 API keyword search
+
+        It performs:
+        - Snippet reranking (via Modal)
+        - Paper-level aggregation
+        - Quote extraction (Step 1)
+        - Clustering and planning (Step 2)
+        - Iterative synthesis (Step 3)
+        - Table generation for list sections
+
+        :param req: ToolRequest with query and user info
+        :param snippets: List of pre-retrieved snippet dictionaries (200-1000)
+        :param paper_metadata: Optional dict mapping corpus_id to paper metadata
+        :param inline_tags: Whether to include inline <paper> tags in output
+        :return: TaskResult with complete report
+        """
+        from scholarqa.utils import get_paper_metadata, NUMERIC_META_FIELDS, CATEGORICAL_META_FIELDS
+
+        self.tool_request = req
+        self.update_task_state(
+            "Processing snippet-based query",
+            task_estimated_time="~2-3 minutes",
+            step_estimated_time=5
+        )
+
+        task_id = self.task_id if self.task_id else req.task_id
+        user_id, msg_id = self.get_user_msg_id()
+        msg_id = task_id if not msg_id else msg_id
+        query = req.query
+
+        logger.info(
+            f"Received snippet-based query: {query} from user_id: {user_id} "
+            f"with {len(snippets)} snippets, opt_in: {req.opt_in}"
+        )
+
+        # Initialize event trace (no retrieval performed, so n_retrieval=0)
+        event_trace = EventTrace(
+            task_id,
+            0,  # No retrieval performed by service
+            self.paper_finder.n_rerank,
+            req,
+            user_id=user_id
+        )
+
+        cost_args = CostReportingArgs(
+            task_id=task_id,
+            user_id=user_id,
+            description="Snippet-based corpus QA",
+            model=self.llm_model,
+            msg_id=msg_id
+        )
+
+        # Use client-provided snippets (skip preprocessing and retrieval)
+        retrieved_candidates = snippets
+        if not retrieved_candidates:
+            raise Exception("No snippets provided for processing")
+
+        event_trace.trace_retrieval_event(retrieved_candidates)
+
+        # Extract metadata from snippets if available
+        s2_srch_metadata = []
+        for snippet in retrieved_candidates:
+            if any(field in snippet for field in CATEGORICAL_META_FIELDS + NUMERIC_META_FIELDS):
+                metadata = {
+                    k: v for k, v in snippet.items()
+                    if k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS
+                }
+                s2_srch_metadata.append(metadata)
+
+        # Combine snippet metadata with client-provided metadata
+        initial_paper_metadata = {str(paper["corpus_id"]): paper for paper in s2_srch_metadata}
+        if paper_metadata:
+            # Client-provided metadata takes precedence
+            initial_paper_metadata.update({str(k): v for k, v in paper_metadata.items()})
+
+        # Rerank and aggregate (same as base class)
+        self.update_task_state("Reranking and aggregating snippets", step_estimated_time=10)
+        reranked_df, final_paper_metadata = self.rerank_and_aggregate(
+            query, retrieved_candidates, initial_paper_metadata
+        )
+
+        if reranked_df.empty:
+            raise Exception(
+                "No relevant papers found after reranking. Try providing more diverse snippets."
+            )
+
+        event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
+
+        # Generate report (same as base class)
+        self.update_task_state(STATUS_SYNTHESIS)
+        report_data = self.generate_report(
+            query=query,
+            reranked_df=reranked_df,
+            paper_metadata=final_paper_metadata,
+            cost_args=cost_args,
+            event_trace=event_trace,
+            user_id=user_id,
+            inline_tags=inline_tags
+        )
+
+        # Postprocess and trace (same as base class)
         self.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
         event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
         event_trace.persist_trace(self.logs_config)

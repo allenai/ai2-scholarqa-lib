@@ -23,7 +23,7 @@ from scholarqa.rag.reranker.modal_engine import ModalReranker
 from scholarqa.rag.reranker.reranker_base import RERANKER_MAPPING
 from scholarqa.rag.retrieval import PaperFinderWithReranker, PaperFinder
 from scholarqa.rag.retriever_base import FullTextRetriever
-from scholarqa.scholar_qa import ScholarQA
+from scholarqa.scholar_qa import ScholarQA, ScholarQASnippetBased
 from scholarqa.lite import ScholarQALite
 from scholarqa.state_mgmt.local_state_mgr import LocalStateMgrClient
 from typing import Type, TypeVar
@@ -96,94 +96,25 @@ def _do_snippet_based_task(tool_request: ToolRequest, task_id: str, request: Sni
     Execute snippet-based pipeline: reranking + report generation.
     Skips query preprocessing and retrieval steps since client provides snippets.
     """
-    from scholarqa.llms.constants import CostReportingArgs, STATUS_SYNTHESIS
-    from scholarqa.trace.event_traces import EventTrace
-    from scholarqa.utils import get_paper_metadata, NUMERIC_META_FIELDS, CATEGORICAL_META_FIELDS
-
-    # Load ScholarQA instance (with reranker configured)
     # Override n_rerank if client specified a different value
     paper_finder_args = {}
     if request.n_rerank and request.n_rerank != run_config.paper_finder_args.get("n_rerank", 50):
         paper_finder_args["n_rerank"] = request.n_rerank
 
-    scholar_qa = app_config.load_scholarqa(task_id, tool_request, **paper_finder_args)
-
-    query = request.query
-    user_id = request.user_id or "snippet_based_user"
-
-    logger.info(f"Processing snippet-based query: {query} with {len(request.snippets)} snippets")
-
-    # Initialize event trace for logging
-    event_trace = EventTrace(
+    # Load ScholarQASnippetBased instance (specialized for snippet processing)
+    scholar_qa = app_config.load_scholarqa(
         task_id,
-        0,  # No retrieval performed
-        scholar_qa.paper_finder.n_rerank,
         tool_request,
-        user_id=user_id
+        sqa_class=ScholarQASnippetBased,
+        **paper_finder_args
     )
 
-    cost_args = CostReportingArgs(
-        task_id=task_id,
-        user_id=user_id,
-        description="Snippet-based corpus QA",
-        model=scholar_qa.llm_model,
-        msg_id=task_id
-    )
-
-    # Use client-provided snippets directly (skip retrieval)
-    retrieved_candidates = request.snippets
-    if not retrieved_candidates:
-        raise Exception("No snippets provided")
-
-    event_trace.trace_retrieval_event(retrieved_candidates)
-
-    # Extract metadata from snippets if available
-    s2_srch_metadata = []
-    for snippet in retrieved_candidates:
-        if any(field in snippet for field in CATEGORICAL_META_FIELDS + NUMERIC_META_FIELDS):
-            metadata = {k: v for k, v in snippet.items() if
-                       k == "corpus_id" or k in NUMERIC_META_FIELDS or k in CATEGORICAL_META_FIELDS}
-            s2_srch_metadata.append(metadata)
-
-    # Combine client-provided metadata with snippet metadata
-    initial_paper_metadata = {str(paper["corpus_id"]): paper for paper in s2_srch_metadata}
-    if request.paper_metadata:
-        # Client-provided metadata takes precedence
-        initial_paper_metadata.update({str(k): v for k, v in request.paper_metadata.items()})
-
-    # Rerank and aggregate snippets at paper level
-    scholar_qa.update_task_state("Reranking and aggregating snippets", step_estimated_time=10)
-    reranked_df, paper_metadata = scholar_qa.rerank_and_aggregate(
-        query, retrieved_candidates, initial_paper_metadata
-    )
-
-    if reranked_df.empty:
-        raise Exception("No relevant papers found after reranking")
-
-    event_trace.trace_rerank_event(reranked_df.to_dict(orient="records"))
-
-    # Generate report using multi-step pipeline
-    scholar_qa.update_task_state(STATUS_SYNTHESIS)
-    report_data = scholar_qa.generate_report(
-        query=query,
-        reranked_df=reranked_df,
-        paper_metadata=paper_metadata,
-        cost_args=cost_args,
-        event_trace=event_trace,
-        user_id=user_id,
+    # Execute the snippet-based pipeline
+    return scholar_qa.run_snippet_based_pipeline(
+        req=tool_request,
+        snippets=request.snippets,
+        paper_metadata=request.paper_metadata,
         inline_tags=False
-    )
-
-    # Postprocess and trace
-    scholar_qa.postprocess_json_output(report_data.json_summary, quotes_meta=report_data.quotes_metadata)
-    event_trace.trace_summary_event(report_data.json_summary, report_data.cost_result, report_data.tcosts)
-    event_trace.persist_trace(scholar_qa.logs_config)
-
-    return TaskResult(
-        report_title=report_data.report_title,
-        sections=report_data.sections,
-        cost=event_trace.total_cost,
-        tokens=event_trace.tokens
     )
 
 
@@ -244,12 +175,29 @@ def create_app() -> FastAPI:
     @app.post("/query_corpusqa_sync_with_snippets")
     def use_tool_sync_with_snippets(
             request: SnippetBasedRequest,
-    ) -> ToolResponse:
+    ) -> Union[AsyncToolResponse, ToolResponse]:
         """
-        Synchronous endpoint for snippet-based report generation.
+        Asynchronous endpoint for snippet-based report generation.
         Client provides pre-retrieved snippets, service performs reranking + synthesis.
+
+        Returns task_id immediately. Client should poll with task_id to get results.
         """
-        # Validate input
+        # Initialize state manager
+        if not app_config.state_mgr_client:
+            app_config.state_mgr_client = lazy_load_state_mgr_client()
+
+        # Check if this is a status update request
+        if request.task_id:
+            return _handle_async_task_check_in(
+                ToolRequest(
+                    task_id=request.task_id,
+                    query=request.query,
+                    user_id=request.user_id,
+                    opt_in=request.opt_in
+                )
+            )
+
+        # Validate input for new task
         if not request.query or not request.query.strip():
             raise HTTPException(status_code=400, detail="Query required and cannot be empty")
         if not request.snippets:
@@ -257,14 +205,10 @@ def create_app() -> FastAPI:
         if len(request.snippets) > 1000:
             raise HTTPException(status_code=400, detail="Maximum 1000 snippets allowed")
 
-        # Initialize state manager
-        if not app_config.state_mgr_client:
-            app_config.state_mgr_client = lazy_load_state_mgr_client()
-
         # Create new task
         task_id = str(uuid4())
         logs_config.task_id = task_id
-        logger.info(f"New snippet-based sync task with {len(request.snippets)} snippets")
+        logger.info(f"New snippet-based task with {len(request.snippets)} snippets")
 
         # Create ToolRequest for internal processing
         tool_request = ToolRequest(
@@ -277,23 +221,17 @@ def create_app() -> FastAPI:
         # Initialize task tracking
         app_config.state_mgr_client.init_task(task_id, tool_request)
 
-        start_time = time()
-        try:
-            # Execute synchronous pipeline
-            task_result = _do_snippet_based_task(tool_request, task_id, request)
+        # Start async task in background process
+        estimated_time = _start_snippet_based_async_task(task_id, tool_request, request)
 
-            elapsed = time() - start_time
-            logger.info(f"Snippet-based task completed in {elapsed:.2f} seconds, cost: ${task_result.cost}")
-
-            return ToolResponse(
-                task_id=task_id,
-                query=request.query,
-                task_result=task_result
-            )
-        except Exception as e:
-            elapsed = time() - start_time
-            logger.exception(f"Snippet-based task failed after {elapsed:.2f} seconds: {e}")
-            raise HTTPException(status_code=500, detail=f"Task failed: {str(e)}")
+        return AsyncToolResponse(
+            task_id=task_id,
+            query=request.query,
+            estimated_time=estimated_time,
+            task_status=TASK_STATUSES["STARTED"],
+            task_result=None,
+            steps=[started_task_step]
+        )
 
     app.state.use_tool_fn = use_tool
     return app
@@ -337,6 +275,62 @@ def _start_async_task(task_id: str, tool_request: ToolRequest) -> str:
     async_context.Process(
         target=_do_task_and_write_result,
         name=f"Async Task {task_id}",
+        args=(),
+    ).start()
+
+    return estimated_time
+
+
+def _start_snippet_based_async_task(task_id: str, tool_request: ToolRequest, snippet_request: SnippetBasedRequest) -> str:
+    """
+    Start snippet-based task in background process.
+    Similar to _start_async_task but for snippet-based requests.
+    """
+    global started_task_step
+    estimated_time = "~2-3 minutes"  # Faster than regular pipeline (no retrieval)
+    tool_request.task_id = task_id
+    task_state_manager = app_config.state_mgr_client.get_state_mgr(tool_request)
+    started_task_step = TaskStep(
+        description=TASK_STATUSES["STARTED"],
+        start_timestamp=time(),
+        estimated_timestamp=time() + TIMEOUT
+    )
+    task_state = AsyncTaskState(
+        task_id=task_id,
+        estimated_time=estimated_time,
+        task_status=TASK_STATUSES["STARTED"],
+        task_result=None,
+        extra_state={
+            "query": tool_request.query,
+            "start": time(),
+            "steps": [started_task_step],
+            "snippet_count": len(snippet_request.snippets)
+        },
+    )
+    task_state_manager.write_state(task_state)
+
+    def _do_snippet_task_and_write_result():
+        extra_state = {}
+        try:
+            task_result = _do_snippet_based_task(tool_request, task_id, snippet_request)
+            task_status = TASK_STATUSES["COMPLETED"]
+            extra_state["end"] = time()
+        except Exception as e:
+            task_result = None
+            task_status = TASK_STATUSES["FAILED"]
+            extra_state["error"] = str(e)
+            logger.exception(f"Snippet-based task {task_id} failed: {e}")
+
+        state = task_state_manager.read_state(task_id)
+        state.task_result = task_result
+        state.task_status = task_status
+        state.extra_state.update(extra_state)
+        state.estimated_time = "--"
+        task_state_manager.write_state(state)
+
+    async_context.Process(
+        target=_do_snippet_task_and_write_result,
+        name=f"Snippet Task {task_id}",
         args=(),
     ).start()
 
