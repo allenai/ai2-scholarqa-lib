@@ -48,7 +48,6 @@ class EditIntentAnalysis(BaseModel):
     papers_to_add: List[str] = Field(default=[], description="corpus_ids to add to the report")
     papers_to_remove: List[str] = Field(default=[],
                                         description="corpus_ids to remove from the report (resolved from constraints)")
-
     # Section targeting
     target_sections: List[str] = Field(default=[], description="Specific section titles mentioned in instruction")
     affects_all_sections: bool = Field(description="Whether edit affects entire report vs specific sections")
