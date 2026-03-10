@@ -278,7 +278,7 @@ class ScholarQA:
                         # Method 2: Alphabet-only matching (high recall)
                         if not raw_match:
                             lookup_idx = sent_alpha[sidx].find(quote_reg)
-                        
+
                         # Method 3: Word-level overlap matching for approximate matches
                         if lookup_idx < 0 and len(quote.strip()) > 20:  # Only for longer quotes to avoid false positives
                             quote_words = quote.lower().strip().split()
@@ -289,7 +289,7 @@ class ScholarQA:
                             if matching_subsequence:
                                 # Find the subsequence in the sentence text to get character index
                                 lookup_idx = sentence["text"].lower().find(matching_subsequence)
-                                
+
                         if lookup_idx >= 0:
                             lookup_end = lookup_idx + len(quote)
                             curr_quote_map["section_title"] = sentence["section_title"]
@@ -344,33 +344,33 @@ class ScholarQA:
     def _word_overlap_match(quote_words: List[str], sentence_words: List[str], threshold: float = 0.75) -> Tuple[str, float]:
         """
         Find word overlap using SequenceMatcher matching blocks.
-        
+
         Args:
             quote_words: List of words from the quote (should be normalized/lowercased)
             sentence_words: List of words from the sentence (should be normalized/lowercased)
             threshold: Minimum overlap ratio (matching words / quote length) to consider a match
-            
+
         Returns:
             Tuple of (first_matching_subsequence, overlap_ratio). Returns ("", 0.0) if insufficient overlap.
         """
         if not quote_words or not sentence_words:
             return "", 0.0
-        
+
         # Strip punctuation from sentence words for better matching
         sentence_words_clean = [re.sub(r'[^\w]', '', word) for word in sentence_words]
-        
+
         quote_words_clean = [re.sub(r'[^\w]', '', word) for word in quote_words]
         quote_words_set = set(quote_words_clean)
         if len(quote_words_set.intersection(set(sentence_words_clean))) / len(quote_words_set) < 0.5:
             return "", 0.0
-        
+
         matcher = SequenceMatcher(None, quote_words_clean, sentence_words_clean)
         matching_blocks = matcher.get_matching_blocks()
-        
+
         # Calculate total matching words from all blocks (excluding the final dummy block)
         total_matching_words = sum(block.size for block in matching_blocks[:-1])
         overlap_ratio = total_matching_words / len(quote_words)
-        
+
         if overlap_ratio >= threshold and matching_blocks:
             # Get the first matching block with size > 1 and convert to string
             for block in matching_blocks:
@@ -381,9 +381,9 @@ class ScholarQA:
                     # Extract the matching subsequence from the sentence
                     matching_subsequence = " ".join(sentence_words[start_idx:start_idx + block_size])
                     return matching_subsequence, overlap_ratio
-            
 
-        
+
+
         return "", overlap_ratio
 
 

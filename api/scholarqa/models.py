@@ -20,9 +20,8 @@ class PaperDetails(BaseModel):
     n_citations: Optional[int] = Field(default=0, description=(
         "The number of times the source paper has been cited"
     ))
+    score: float = Field(default=0.0, description=("Relevance score of the snippet for the query"))
 
-
-# TODO: define your request data
 class ToolRequest(BaseModel):
     task_id: Optional[str] = Field(default=None, description=(
         "Reference to a long-running task. Provide this argument to receive an update on its"
@@ -35,6 +34,24 @@ class ToolRequest(BaseModel):
         "Flag to indicate whether to include the query and response in public release"))
     user_id: Optional[str] = Field(default=None, description="The user id of the user who posed the query")
 
+class ReportEditRequest(ToolRequest):
+    """Request model for report editing endpoint"""
+    intent: str = Field(
+        description="Decontextualized natural language description of the edit to perform. "
+        "Examples: 'Add these papers to the report', 'Shorten section 3', "
+        "'Expand section 4 to include X topic', 'Go deeper on section 5'"
+    )
+    section_titles: Optional[List[str]] = Field(
+        default=[],
+        description="List of section titles to edit. Empty means all sections."
+    )
+    corpus_ids: Optional[List[str]] = Field(
+        default=[],
+        description="List of corpus IDs to add to the report"
+    )
+    thread_id: str = Field(description=(
+        "ID of the thread containing the current report to edit"
+    ))
 
 class CitationSrc(BaseModel):
     id: str = Field(default=None, description=(
@@ -44,7 +61,7 @@ class CitationSrc(BaseModel):
     snippets: Optional[List[str]] = Field(default=[], description=(
         "A list of all the relevant snippets from the cited paper"
     ))
-    score: float = Field(description=("Relevance score of the snippet for the query"))
+    score: float = Field(default=0.0, description=("Relevance score of the snippet for the query"))
     snippet_metadata: Optional[List[Dict[str, Any]]] = Field(default=None, description=(
         "Metadata for each snippet such as section name"
     ))

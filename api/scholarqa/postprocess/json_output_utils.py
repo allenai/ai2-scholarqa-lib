@@ -111,6 +111,7 @@ def pop_ref_data(ref_str_id, ref_corpus_id, fixed_quote, curr_paper_metadata) ->
         curr_ref["paper"]["year"] = make_int(curr_paper_metadata.get("year", 0))
         curr_ref["paper"]["venue"] = curr_paper_metadata["venue"]
         curr_ref["paper"]["n_citations"] = curr_paper_metadata["citationCount"]
+        curr_ref["paper"]["score"] = curr_paper_metadata.get("relevance_judgement", 0)
     return curr_ref
 
 
@@ -124,7 +125,7 @@ def get_json_summary(llm_model: str, summary_sections: List[str], summary_quotes
     llm_ref_format = f'<Model name="{llm_name_parts[0].capitalize()}" version="{llm_name_parts[1]}">'
     summary_quotes = {anyascii(k): v for k, v in summary_quotes.items()}
     inline_citation_quotes = {anyascii(k): v for incite in summary_quotes.values() for k, v in
-                              incite["inline_citations"].items()}
+                              incite["inline_citations"].items() if "inline_citations" in incite}
     for sec in summary_sections:
         try:
             curr_section = get_section_text(sec)

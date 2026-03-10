@@ -15,6 +15,7 @@ from scholarqa.models import (
     AsyncToolResponse,
     TaskResult,
     ToolRequest,
+    ReportEditRequest,
     ToolResponse,
     TaskStep
 )
@@ -23,6 +24,7 @@ from scholarqa.rag.reranker.reranker_base import RERANKER_MAPPING
 from scholarqa.rag.retrieval import PaperFinderWithReranker, PaperFinder
 from scholarqa.rag.retriever_base import FullTextRetriever
 from scholarqa.scholar_qa import ScholarQA
+from scholarqa.edit_pipeline_runner import EditPipelineRunner
 from scholarqa.lite import ScholarQALite
 from scholarqa.state_mgmt.local_state_mgr import LocalStateMgrClient
 from typing import Type, TypeVar
@@ -86,8 +88,10 @@ def _do_task(tool_request: ToolRequest, task_id: str) -> TaskResult:
     use `task_state_manager.read_state(task_id)` to retrieve, and `.write_state()`
     to write back.
     """
+    # Route to appropriate pipeline based on request type
     scholar_qa = app_config.load_scholarqa(task_id, tool_request)
-    return scholar_qa.run_qa_pipeline(tool_request)
+    sqa_callable = scholar_qa.run_edit_pipeline if isinstance(scholar_qa, EditPipelineRunner) else scholar_qa.run_qa_pipeline
+    return sqa_callable(tool_request)
 
 
 def _estimate_task_length(tool_request: ToolRequest) -> str:
