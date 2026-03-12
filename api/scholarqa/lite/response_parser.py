@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Tuple
 
 from anyascii import anyascii
 
+from scholarqa.utils import build_corpus_id_lookup, parse_citation_key
+
 logger = logging.getLogger(__name__)
 
 # Regex pattern for inline citations: [corpus_id | Author et al. | year | Citations: N]
@@ -131,6 +133,8 @@ def filter_per_paper_summaries(
     per_paper_summaries_extd = {}
     quotes_metadata = {}
 
+    corpus_id_lookup = build_corpus_id_lookup(per_paper_data)
+
     all_text = "\n".join(section_texts)
     citations = CITATION_PATTERN.findall(all_text)
 
@@ -145,6 +149,11 @@ def filter_per_paper_summaries(
         if citation_key in per_paper_data:
             per_paper_summaries_extd[citation_key] = per_paper_data[citation_key]
             quotes_metadata[citation_key] = all_quotes_metadata[citation_key]
+        elif corpus_id in corpus_id_lookup:
+            canonical_key = corpus_id_lookup[corpus_id]
+            logger.info(f"Relaxed citation match: '{citation_key}' -> '{canonical_key}'")
+            per_paper_summaries_extd[canonical_key] = per_paper_data[canonical_key]
+            quotes_metadata[canonical_key] = all_quotes_metadata[canonical_key]
 
     logger.info(f"Built per_paper_summaries with {len(per_paper_summaries_extd)} citations")
     return per_paper_summaries_extd, quotes_metadata

@@ -3,7 +3,7 @@ import os
 import sys
 from collections import namedtuple
 from logging import Formatter
-from typing import Any, Dict, Optional, Set, List
+from typing import Any, Dict, Iterable, Optional, Set, List
 
 import requests
 from fastapi import HTTPException
@@ -88,6 +88,29 @@ def make_int(x: Optional[Any]) -> int:
         return int(x)
     except:
         return 0
+
+
+def parse_citation_key(ref_key: str) -> List[str]:
+    """Parse a bracket citation key into its pipe-delimited fields.
+
+    "[88521252 | Agarwal et al. | 2016 | Citations: 0]" -> ["88521252", "Agarwal et al.", "2016", "Citations: 0"]
+    """
+    return ref_key.strip("[]").split(" | ")
+
+
+
+def build_corpus_id_lookup(ref_keys: Iterable[str]) -> Dict[str, str]:
+    """Map corpus_id -> canonical ref key for fallback citation matching.
+
+    "88521252" -> "[88521252 | Agarwal et al. | 2016 | Citations: 0]"
+    Skips non-numeric or 4-digit (year) first fields.
+    """
+    lookup = {}
+    for ref_key in ref_keys:
+        corpus_id = parse_citation_key(ref_key)[0].strip()
+        if corpus_id.isdigit() and len(corpus_id) != 4:
+            lookup[corpus_id] = ref_key
+    return lookup
 
 
 def get_ref_author_str(authors: List[Dict[str, str]]) -> str:
