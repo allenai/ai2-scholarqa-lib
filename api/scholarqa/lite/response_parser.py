@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Tuple
 
 from anyascii import anyascii
 
+from scholarqa.utils import build_corpus_id_lookup, build_unique_author_lookup, parse_citation_key
+
 logger = logging.getLogger(__name__)
 
 # Regex pattern for inline citations: [corpus_id | Author et al. | year | Citations: N]
@@ -115,21 +117,23 @@ def filter_per_paper_summaries(
     section_texts: List[str],
     per_paper_data: Dict[str, Dict[str, Any]],
     all_quotes_metadata: Dict[str, List[Dict[str, Any]]],
-) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+) -> Tuple[List[str], Dict[str, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     """
     Filter pre-computed per-paper data to only include citations found in section texts.
-
-    Args:
-        section_texts: List of section text strings from the model response
-        per_paper_data: Pre-computed {ref_str: {"quote": ..., "inline_citations": {}}} from prepare_references_data
-        all_quotes_metadata: Pre-computed {ref_str: [snippet_metadata]} from prepare_references_data
+    Rewrites malformed bracket citations and injects brackets for prose-only author mentions
+    so downstream JSON formatting can match citations against per_paper_summaries keys.
 
     Returns:
+        section_texts: Section texts with citations rewritten to canonical form
         per_paper_summaries_extd: Filtered per_paper_data for citations found in response
         quotes_metadata: Filtered quotes_metadata for citations found in response
     """
     per_paper_summaries_extd = {}
     quotes_metadata = {}
+    replacements = {}  # malformed citation string -> canonical key
+
+    corpus_id_lookup = build_corpus_id_lookup(per_paper_data)
+    author_lookup = build_unique_author_lookup(per_paper_data)
 
     all_text = "\n".join(section_texts)
     citations = CITATION_PATTERN.findall(all_text)
@@ -145,6 +149,41 @@ def filter_per_paper_summaries(
         if citation_key in per_paper_data:
             per_paper_summaries_extd[citation_key] = per_paper_data[citation_key]
             quotes_metadata[citation_key] = all_quotes_metadata[citation_key]
+        elif corpus_id in corpus_id_lookup:
+            canonical_key = corpus_id_lookup[corpus_id]
+            logger.info(f"Relaxed citation match: '{citation_key}' -> '{canonical_key}'")
+            replacements[citation_key] = canonical_key
+            per_paper_summaries_extd[canonical_key] = per_paper_data[canonical_key]
+            quotes_metadata[canonical_key] = all_quotes_metadata[canonical_key]
+
+    # Rewrite malformed bracket citations to canonical form
+    if replacements:
+        for i, text in enumerate(section_texts):
+            for malformed, canonical in replacements.items():
+                text = text.replace(malformed, canonical)
+            section_texts[i] = text
+
+    # Scan for prose author mentions without bracket citations (e.g., "Molin et al.")
+    prose_insertions = {}  # pattern -> canonical key
+    for last_name, canonical_key in author_lookup.items():
+        if canonical_key in per_paper_summaries_extd:
+            continue
+        if re.search(rf"\b{re.escape(last_name)}\b", all_text):
+            logger.info(f"Prose author match: '{last_name}' -> '{canonical_key}'")
+            prose_insertions[last_name] = canonical_key
+            per_paper_summaries_extd[canonical_key] = per_paper_data[canonical_key]
+            quotes_metadata[canonical_key] = all_quotes_metadata[canonical_key]
+
+    # Inject bracket citation after first prose author mention
+    if prose_insertions:
+        for i, text in enumerate(section_texts):
+            for last_name, canonical_key in prose_insertions.items():
+                # Try "LastName et al." first, fall back to bare "LastName"
+                pattern = rf"(\b{re.escape(last_name)}\s+et\s+al\.)"
+                if not re.search(pattern, text):
+                    pattern = rf"(\b{re.escape(last_name)}\b)"
+                text = re.sub(pattern, rf"\1 {canonical_key}", text, count=1)
+            section_texts[i] = text
 
     logger.info(f"Built per_paper_summaries with {len(per_paper_summaries_extd)} citations")
-    return per_paper_summaries_extd, quotes_metadata
+    return section_texts, per_paper_summaries_extd, quotes_metadata

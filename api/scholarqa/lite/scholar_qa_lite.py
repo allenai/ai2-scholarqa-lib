@@ -61,7 +61,7 @@ class ScholarQALite(ScholarQA):
 
         self.report_title = _generate_title(query, section_titles, model, llm_kwargs)
 
-        per_paper_summaries_extd, quotes_metadata = filter_per_paper_summaries(
+        section_texts, per_paper_summaries_extd, quotes_metadata = filter_per_paper_summaries(
             section_texts, per_paper_data, all_quotes_metadata
         )
 
