@@ -53,19 +53,19 @@ class TestFilterPerPaperSummariesRelaxed:
             "Agarwal et al. proposed a g-prior extension "
             "[88521252 | Agarwal et al. | 2016 | Citations: 0]."
         ]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert AGARWAL_KEY in result_ppd
 
     def test_wrong_author_falls_back_to_corpus_id(self):
         """The actual production bug: model wrote 'Agarwal' instead of 'Agarwal et al.'"""
         sections = [f"Agarwal proposed a g-prior extension {AGARWAL_WRONG_AUTHOR}."]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert AGARWAL_KEY in result_ppd
 
     def test_wrong_citation_count_falls_back(self):
         """Model outputs stale citation count — corpus ID fallback resolves it."""
         sections = [f"Agarwal et al. extended the g-prior setup {AGARWAL_WRONG_COUNT}."]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert AGARWAL_KEY in result_ppd
 
     def test_no_match(self):
@@ -74,7 +74,7 @@ class TestFilterPerPaperSummariesRelaxed:
             "Unknown paper reference "
             "[11111111 | Nobody | 2024 | Citations: 0]."
         ]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert len(result_ppd) == 0
 
     def test_same_corpus_id_twice_deduplicates(self):
@@ -83,23 +83,37 @@ class TestFilterPerPaperSummariesRelaxed:
             f"Agarwal et al. extended the g-prior setup {AGARWAL_WRONG_COUNT} "
             f"and later confirmed results {AGARWAL_KEY}."
         ]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert len(result_ppd) == 1
         assert AGARWAL_KEY in result_ppd
+
+    def test_malformed_bracket_rewritten_in_text(self):
+        """Malformed bracket citation is replaced with canonical key in section text."""
+        sections = [f"Agarwal proposed a g-prior extension {AGARWAL_WRONG_AUTHOR}."]
+        result_texts, _, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        assert AGARWAL_WRONG_AUTHOR not in result_texts[0]
+        assert AGARWAL_KEY in result_texts[0]
 
     def test_prose_author_mention_without_bracket(self):
         """Model mentions author in prose but never emits a bracket citation."""
         ppd, qmd = _make_paper_data(AGARWAL_KEY, MOLIN_KEY)
         sections = ['As Molin et al. explain, "Software systems evolve."']
-        result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
         assert MOLIN_KEY in result_ppd
+
+    def test_prose_author_bracket_injected_in_text(self):
+        """Prose-only author mention gets a bracket citation injected."""
+        ppd, qmd = _make_paper_data(AGARWAL_KEY, MOLIN_KEY)
+        sections = ['As Molin et al. explain, "Software systems evolve."']
+        result_texts, _, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        assert MOLIN_KEY in result_texts[0]
 
     def test_prose_author_skipped_when_ambiguous(self):
         """Two papers by same first author — prose mention should not resolve."""
         keys = [MOLIN_KEY, "[99999999 | Molin et al. | 2022 | Citations: 3]"]
         ppd, qmd = _make_paper_data(*keys)
         sections = ['As Molin et al. explain, "Software systems evolve."']
-        result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
         assert len(result_ppd) == 0
 
     def test_prose_author_not_double_counted_with_bracket(self):
@@ -107,5 +121,21 @@ class TestFilterPerPaperSummariesRelaxed:
         sections = [
             f"Agarwal et al. proposed a g-prior extension {AGARWAL_KEY}."
         ]
-        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        _, result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert len(result_ppd) == 1
+
+    def test_prose_repeated_author_gets_one_bracket(self):
+        """Author mentioned twice in prose — bracket injected only on first occurrence."""
+        ppd, qmd = _make_paper_data(MOLIN_KEY)
+        sections = ['Molin et al. found X. Later, Molin et al. confirmed Y.']
+        result_texts, _, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        assert result_texts[0].count(MOLIN_KEY) == 1
+
+    def test_prose_single_author_bracket_injected(self):
+        """Single-author paper (no 'et al.') gets bracket injected after bare last name."""
+        smith_key = "[55555555 | Smith | 2021 | Citations: 10]"
+        ppd, qmd = _make_paper_data(smith_key)
+        sections = ['Smith proposed a novel framework for testing.']
+        result_texts, result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        assert smith_key in result_ppd
+        assert smith_key in result_texts[0]
