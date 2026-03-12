@@ -1,5 +1,5 @@
 from scholarqa.lite.response_parser import filter_per_paper_summaries
-from scholarqa.utils import build_corpus_id_lookup
+from scholarqa.utils import build_corpus_id_lookup, build_unique_author_lookup
 
 
 AGARWAL_KEY = "[88521252 | Agarwal et al. | 2016 | Citations: 0]"
@@ -15,6 +15,22 @@ def _make_paper_data(*keys):
 
 
 PER_PAPER_DATA, QUOTES_METADATA = _make_paper_data(AGARWAL_KEY, BUI_KEY)
+
+
+MOLIN_KEY = "[12345678 | Molin et al. | 2020 | Citations: 15]"
+
+
+class TestBuildUniqueAuthorLookup:
+    def test_maps_unique_author_to_key(self):
+        lookup = build_unique_author_lookup(PER_PAPER_DATA)
+        assert lookup["Agarwal"] == AGARWAL_KEY
+        assert lookup["Bui"] == BUI_KEY
+
+    def test_excludes_ambiguous_authors(self):
+        """Two papers by 'Agarwal' — neither should appear."""
+        keys = [AGARWAL_KEY, "[99999999 | Agarwal et al. | 2020 | Citations: 5]"]
+        lookup = build_unique_author_lookup(keys)
+        assert "Agarwal" not in lookup
 
 
 class TestBuildCorpusIdLookup:
@@ -70,3 +86,26 @@ class TestFilterPerPaperSummariesRelaxed:
         result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
         assert len(result_ppd) == 1
         assert AGARWAL_KEY in result_ppd
+
+    def test_prose_author_mention_without_bracket(self):
+        """Model mentions author in prose but never emits a bracket citation."""
+        ppd, qmd = _make_paper_data(AGARWAL_KEY, MOLIN_KEY)
+        sections = ['As Molin et al. explain, "Software systems evolve."']
+        result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        assert MOLIN_KEY in result_ppd
+
+    def test_prose_author_skipped_when_ambiguous(self):
+        """Two papers by same first author — prose mention should not resolve."""
+        keys = [MOLIN_KEY, "[99999999 | Molin et al. | 2022 | Citations: 3]"]
+        ppd, qmd = _make_paper_data(*keys)
+        sections = ['As Molin et al. explain, "Software systems evolve."']
+        result_ppd, _ = filter_per_paper_summaries(sections, ppd, qmd)
+        assert len(result_ppd) == 0
+
+    def test_prose_author_not_double_counted_with_bracket(self):
+        """Paper already resolved via bracket — prose scan should not duplicate it."""
+        sections = [
+            f"Agarwal et al. proposed a g-prior extension {AGARWAL_KEY}."
+        ]
+        result_ppd, _ = filter_per_paper_summaries(sections, PER_PAPER_DATA, QUOTES_METADATA)
+        assert len(result_ppd) == 1

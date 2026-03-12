@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Tuple
 
 from anyascii import anyascii
 
-from scholarqa.utils import build_corpus_id_lookup, parse_citation_key
+from scholarqa.utils import build_corpus_id_lookup, build_unique_author_lookup, parse_citation_key
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,7 @@ def filter_per_paper_summaries(
     quotes_metadata = {}
 
     corpus_id_lookup = build_corpus_id_lookup(per_paper_data)
+    author_lookup = build_unique_author_lookup(per_paper_data)
 
     all_text = "\n".join(section_texts)
     citations = CITATION_PATTERN.findall(all_text)
@@ -152,6 +153,15 @@ def filter_per_paper_summaries(
         elif corpus_id in corpus_id_lookup:
             canonical_key = corpus_id_lookup[corpus_id]
             logger.info(f"Relaxed citation match: '{citation_key}' -> '{canonical_key}'")
+            per_paper_summaries_extd[canonical_key] = per_paper_data[canonical_key]
+            quotes_metadata[canonical_key] = all_quotes_metadata[canonical_key]
+
+    # Scan for prose author mentions without bracket citations (e.g., "Molin et al.")
+    for last_name, canonical_key in author_lookup.items():
+        if canonical_key in per_paper_summaries_extd:
+            continue
+        if re.search(rf"\b{re.escape(last_name)}\b", all_text):
+            logger.info(f"Prose author match: '{last_name}' -> '{canonical_key}'")
             per_paper_summaries_extd[canonical_key] = per_paper_data[canonical_key]
             quotes_metadata[canonical_key] = all_quotes_metadata[canonical_key]
 
