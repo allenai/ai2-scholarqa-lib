@@ -16,6 +16,7 @@ from scholarqa.preprocess.edit_intent_analyzer import analyze_edit_intent, EditI
 from scholarqa.rag.edit_pipeline import EditAction, EditPipeline
 from scholarqa.scholar_qa import ScholarQA
 from scholarqa.trace.event_traces import EventTrace
+from scholarqa.table_generation.table_model import TableWidget
 from scholarqa.utils import get_paper_metadata, NUMERIC_META_FIELDS, CATEGORICAL_META_FIELDS
 
 logger = logging.getLogger(__name__)
@@ -221,7 +222,7 @@ class EditPipelineRunner(ScholarQA):
                 original_query=original_query,
             )
             retrieved_candidates.extend(mentioned_candidates)
-        elif intent_analysis.needs_search:
+        if intent_analysis.needs_search:
             snippet_results, search_api_results = self._search_for_new_papers(intent_analysis)
             retrieved_candidates.extend(snippet_results + search_api_results)
 
@@ -529,7 +530,7 @@ class EditPipelineRunner(ScholarQA):
         # ====================================================================
         # STEP 1: Search and Rerank (CONDITIONAL, based on intent analysis)
         # ====================================================================
-        if intent_analysis.needs_search:
+        if intent_analysis.is_addition:
             retrieved_candidates, paper_metadata = self.find_relevant_papers_for_edit(
                 intent_analysis=intent_analysis,
                 original_query=req.query or "",
@@ -701,7 +702,7 @@ class EditPipelineRunner(ScholarQA):
         )
 
         json_summary, generated_sections, table_threads = [], [], []
-        tables = [None for _ in plan_dimensions]
+        tables = {}  # keyed by json_summary index, not plan_dimensions index
         citation_ids = dict()
         current_sections_map = {s["title"]: s for s in report_sections}
 
@@ -750,13 +751,16 @@ class EditPipelineRunner(ScholarQA):
             section_edited = action in (EditAction.REWRITE, EditAction.NEW)
             if section_json["format"] == "list" and section_json["citations"] and self.run_table_generation \
                     and (section_edited or format_changed):
-                dim["idx"] = idx
+                dim["idx"] = len(json_summary) - 1  # json_summary index, not plan index
                 cit_ids = [int(c["paper"]["corpus_id"]) for c in section_json["citations"]]
                 tthread = self.gen_table_thread(user_id, edit_instruction, dim, cit_ids, tables)
                 if tthread:
                     table_threads.append(tthread)
 
             gen_sec = self.get_gen_sections_from_json(section_json)
+            # Preserve existing table for KEEP sections (get_gen_sections_from_json doesn't copy it)
+            if action == EditAction.KEEP and section_json.get("table") is not None:
+                gen_sec.table = TableWidget.model_validate(section_json["table"])
             generated_sections.append(gen_sec)
 
         # Capture CostAwareLLMResult from generator return value
@@ -782,15 +786,18 @@ class EditPipelineRunner(ScholarQA):
 
         tcosts = []
         for sidx in range(len(json_summary)):
-            tables_val = None
-            if sidx < len(tables) and tables[sidx]:
+            if sidx in tables and tables[sidx]:
                 if type(tables[sidx]) == tuple:
                     tables_val, tcost = tables[sidx]
                     tcosts.append(tcost)
                 else:
                     tables_val = tables[sidx]
-            json_summary[sidx]["table"] = tables_val.to_dict() if tables_val else None
-            generated_sections[sidx].table = tables_val if tables_val else None
+                json_summary[sidx]["table"] = tables_val.to_dict()
+                generated_sections[sidx].table = tables_val
+            elif "table" not in json_summary[sidx]:
+                # REWRITE/NEW sections without table gen: ensure "table" key exists
+                # KEEP sections already have "table" from current_sections_map — left untouched
+                json_summary[sidx]["table"] = None
 
         self.postprocess_json_output(json_summary, quotes_meta=quotes_metadata)
 

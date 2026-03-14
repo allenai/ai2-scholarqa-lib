@@ -59,6 +59,12 @@ User mentioned these section titles: {section_titles}
 - "Remove papers from venue X" → Look at current_citations, find papers with that venue, output their corpus_ids in papers_to_remove
 - "Remove papers before 2020" → Look at current_citations, find papers with year < 2020, output their corpus_ids in papers_to_remove
 - "Rewrite section 2" / "Fix errors" / "Shorten" → is_stylistic = true
+- "Delete the X section" / "Remove section X" → is_stylistic = false, target_sections = ["X"]. This is a STRUCTURAL change, NOT paper removal — do NOT populate papers_to_remove.
+
+**IMPORTANT — Section removal vs paper removal:**
+"Remove/delete section X" means delete the section structure. papers_to_remove must stay EMPTY.
+"Remove paper 12345" or "Remove papers before 2020" means remove specific papers. papers_to_remove should have corpus_ids.
+Do NOT confuse these two intents. Section deletion is handled by the clustering step (DELETE action), not by papers_to_remove.
 
 **Composing search_query:**
 When search is needed, combine:
@@ -114,6 +120,17 @@ Output:
 }}
 
 Example 4:
+Edit Instruction: "Remove the Related Work section"
+Output:
+{{
+  "cot": "User wants to remove an entire section. This is a structural change, not paper removal. The clustering step will assign DELETE action to this section. papers_to_remove should be empty.",
+  "search_query": "",
+  "is_stylistic": false,
+  "target_sections": ["Related Work"],
+  "affects_all_sections": false
+}}
+
+Example 5:
 Edit Instruction: "Remove papers from before 2020"
 current_citations includes: [{{"corpus_id": "111", "year": 2018}}, {{"corpus_id": "222", "year": 2021}}, {{"corpus_id": "333", "year": 2019}}]
 Output:
@@ -125,7 +142,7 @@ Output:
   "affects_all_sections": true
 }}
 
-Example 5:
+Example 6:
 Edit Instruction: "Add papers 123 and 456 to the report"
 mentioned_papers: [123, 456]
 Output:
@@ -137,40 +154,43 @@ Output:
   "affects_all_sections": true
 }}
 
-Example 6:
+Example 7:
 Original Query: "Training techniques for large language models"
 Edit Instruction: "Add recent papers on reinforcement learning to the Methods section"
 Output:
 {{
-    "cot": "User wants to add recent papers on reinforcement learning specifically to the Methods section
-. Need to search combining original query with new topic and section i.e. training methods like reinforcement learning",
-    "search_query": "LLM training methods related to reinforcement learning",
-    "earliest_search_year": "2023",
-    "is_stylistic": false,
-    "affects_all_sections": false,
-    "target_sections": ["Methods"]
-}}
-
-Example 7:
-Edit Instruction: "Remove papers by John Doe"
-Output:
-{{
-  "cot": "User wants to remove papers by author John Doe. Ppaers by John Doe in current_citations are corpus_id_1 and corpus_id_2.",
-  "search_query": "",
+  "cot": "User wants to add recent papers on reinforcement learning specifically to the Methods section. Need to search combining original query with new topic and section i.e. training methods like reinforcement learning",
+  "search_query": "LLM training methods related to reinforcement learning",
+  "earliest_search_year": "2023",
   "is_stylistic": false,
-  "papers_to_remove": ["corpus_id_1", "corpus_id_2],
-    "affects_all_sections": true
+  "affects_all_sections": false,
+  "target_sections": ["Methods"]
 }}
 
 Example 8:
+Edit Instruction: "Remove papers by John Doe"
+Output:
+{{
+  "cot": "User wants to remove papers by author John Doe. Papers by John Doe in current_citations are corpus_id_1 and corpus_id_2.",
+  "search_query": "",
+  "is_stylistic": false,
+  "papers_to_remove": ["corpus_id_1", "corpus_id_2"],
+  "affects_all_sections": true
+}}
+
+Example 9:
 Edit Instruction: "Add papers by John Doe from NeurIPS 2022"
 Output:
 {{
   "cot": "User wants to add papers by John Doe from NeurIPS 2022. Need to search combining original query with all section titles without the added constraints.",
   "search_query": "Techniques related to training large language models, specifically <section topics>",
-  "earliest_search_year": "2022", "latest_search_year": "2022",
-  "venues": ["NeurIPS"],
+  "earliest_search_year": "2022",
+  "latest_search_year": "2022",
+  "venues": "NeurIPS",
   "authors": ["John Doe"],
+  "is_stylistic": false,
+  "affects_all_sections": true
+}}
 
 </examples>
 
