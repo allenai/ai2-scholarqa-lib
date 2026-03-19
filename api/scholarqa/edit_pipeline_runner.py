@@ -153,16 +153,17 @@ class EditPipelineRunner(ScholarQA):
         for corpus_id in paper_ids - snippet_corpus_ids:
             if corpus_id in paper_metadata:
                 candidate = dict(paper_metadata[corpus_id])
-                candidate["text"] = candidate.get("abstract", "")
-                candidate["section_title"] = "abstract"
-                candidate["char_start_offset"] = 0
-                candidate["sentence_offsets"] = []
-                candidate["ref_mentions"] = []
-                candidate["score"] = 1.0
-                candidate["stype"] = "public_api"
-                candidate["pdf_hash"] = ""
-                retrieved_candidates.append(candidate)
-                logger.info(f"Added metadata-only candidate for paper {corpus_id}")
+                if candidate.get("title") and candidate.get("abstract"):
+                    candidate["text"] = candidate.get("abstract", "")
+                    candidate["section_title"] = "abstract"
+                    candidate["char_start_offset"] = 0
+                    candidate["sentence_offsets"] = []
+                    candidate["ref_mentions"] = []
+                    candidate["score"] = 1.0
+                    candidate["stype"] = "public_api"
+                    candidate["pdf_hash"] = ""
+                    retrieved_candidates.append(candidate)
+                    logger.info(f"Added metadata-only candidate for paper {corpus_id}")
 
         return retrieved_candidates, paper_metadata
 

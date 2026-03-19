@@ -263,6 +263,7 @@ NEW: Create a new section (not in current report) with some or all of the provid
 
 For sections marked KEEP, the quotes list should be empty.
 For sections marked REWRITE that incorporate new content, include the relevant quote indices.
+Do not REWRITE a section if the intent specifies paper to be added but there are no relevant paper quotes for it.
 You can also create NEW sections that weren't in the original report, but only if indicated in the instruction or intent.
 If a section has to be replaced, use DELETE for the old one and NEW for the new one, rather than REWRITE, while maintaining order.
 Think hard if a section with REWRITE or NEW action can lead to changes in subsequent sections (e.g., due to paper removals), you can mark those subsequent sections for REWRITE as well to ensure coherence.
