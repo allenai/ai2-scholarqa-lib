@@ -472,7 +472,12 @@ class ScholarQA:
         task_id = str(uuid4())
         self.logs_config.task_id = task_id
         logger.info("New task")
-        tool_request = ToolRequest(task_id=task_id, query=query, user_id="lib_user")
+        tool_request = ToolRequest(
+            task_id=task_id,
+            thread_id=task_id,
+            query=query,
+            user_id="lib_user",
+        )
         try:
             task_result = self.run_qa_pipeline(tool_request, inline_tags)
         except Exception as e:

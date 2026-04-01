@@ -27,6 +27,9 @@ class ToolRequest(BaseModel):
         "Reference to a long-running task. Provide this argument to receive an update on its"
         "status and possibly its result."
     ))
+    thread_id: Optional[str] = Field(default=None, description=(
+        "Identifier used to group related requests and traces."
+    ))
     query: str = Field(default=None, description=(
         "A scientific query posed to scholar qa by a user"
     ))
