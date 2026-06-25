@@ -25,15 +25,13 @@
     },
     "pipeline_args": {
       "validate": true,
-      "llm_model": "anthropic/claude-sonnet-4-20250514",
-      "fallback_llm": "openai/gpt-4.1",
-      "decomposer_llm": "anthropic/claude-sonnet-4-20250514"
-    },
-    "lite_pipeline_args": {
-      "model": "hosted_vllm/allenai/sqa_basicsftdpo",
-      "api_base": "https://ai2-reviz--allenai-sqa-basicsftdpo-serve.modal.run/v1",
-      "temperature": 0.7,
-      "max_tokens": 4096
+      "llm_model": "openai/gpt-5.4-2026-03-05",
+      "fallback_llm": "anthropic/claude-sonnet-4-6,openai/gpt-5.2-2025-12-11,anthropic/claude-sonnet-4-5",
+      "decomposer_llm": "openai/gpt-5.4-2026-03-05"
     }
   }
 }
+
+
+
+

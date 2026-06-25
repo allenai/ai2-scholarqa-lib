@@ -260,9 +260,15 @@ Here are the relevant reference quotes to cite:
 <citation instructions>
 - Each reference is a key value pair, where the key is a pipe separated string enclosed in square brackets representing [ID | AUTHOR_REF | YEAR | Citations: CITES].
 
-The value consists of quotes from the reference, eg. "[2345677 | Doe, Moe et al. | 2024 | Citations: 25]": "This is the reference text."
+The value consists of the quote and sometimes a dictionary of inline citations referenced in that quote
+eg. "[2345677 | Doe, Moe et al. | 2024 | Citations: 25]": {{"quote": "This is the reference text.", "inline_citations": {{"[4517277 | Hero et al. | 2019 | Citations: 250]": "This is an inline citation."}}}}
 
 - Please write the answer, making sure to cite the relevant references inline using the corresponding reference key in the format: [ID | AUTHOR_REF | YEAR | Citations: CITES]. You may use more than one reference key in a row if it's appropriate. In general, use all of the references that support your written text.
+
+- Along with the quote, if any of its accompanying inline citations are relevant to or mentioned in the claim you are writing, you should cite them too using the same aforementioned format.
+
+For example, if you write "The X was shown to be Y." [1234 | A | 2023 | Citations: 3], and reference A (2023) itself states "As shown in B (2020), X is Y.", cite both, one after the other:
+"The X was shown to be Y." [1234 | A | 2023 | Citations: 3] [4321 | B | 2020 | Citations: 25]
 
 - You can add something from your own knowledge. This should only be done if you are sure about its truth and/or if there is not enough information in the references to answer the user's question. Cite the text from your knowledge as (LLM Memory). The citation should follow AFTER the text. Don't cite LLM Memory with another evidence source.
 

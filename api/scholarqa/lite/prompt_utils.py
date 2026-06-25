@@ -97,9 +97,26 @@ def prepare_references_data(
     return references, per_paper_data, quotes_metadata
 
 
-def build_prompt(query: str, section_references: Dict[str, str]) -> str:
-    """Build the prompt in the format expected by the lite generation model."""
-    refs_json = json.dumps(section_references, indent=2)
+def build_prompt(query: str, section_references: Dict[str, Any]) -> str:
+    """
+    Build the prompt for the lite generation model.
+
+    ``section_references`` may map ref_str -> quote string (legacy / no inline citations)
+    or ref_str -> ``{"quote": ..., "inline_citations": {...}}`` (matches the multi-step
+    pipeline's per_paper_summaries_extd). String values are normalized to the dict
+    form so the prompt always feeds the LLM the same shape described in
+    UNIFIED_GENERATION_PROMPT.
+    """
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for ref_str, value in section_references.items():
+        if isinstance(value, dict):
+            normalized[ref_str] = {
+                "quote": value.get("quote", ""),
+                "inline_citations": value.get("inline_citations", {}),
+            }
+        else:
+            normalized[ref_str] = {"quote": value, "inline_citations": {}}
+    refs_json = json.dumps(normalized, indent=2)
     return UNIFIED_GENERATION_PROMPT.format(query=query, refs_json=refs_json)
 
 
