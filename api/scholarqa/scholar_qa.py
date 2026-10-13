@@ -324,9 +324,9 @@ class ScholarQA:
                         curr_quote_map["pdf_hash"] = ""
                         for field in ["title", "abstract"]:
                             if row[field] and (
-                                    new_quote.lower() in row[field].lower() or quote_reg in re.sub(r'[^a-zA-Z]', '',
-                                                                                                   row[field]).lower())\
-                                    or ScholarQA._word_overlap_match(new_quote.lower().split(), row[field].lower().split())[0]:
+                                    new_quote.lower() in row[field].lower()
+                                    or quote_reg in re.sub(r'[^a-zA-Z]', '', row[field]).lower()
+                                    or ScholarQA._word_overlap_match(new_quote.lower().split(), row[field].lower().split())[0]):
                                 curr_quote_map["section_title"] = field
                     mapped_quotes.append(curr_quote_map)
                 quotes_metadata[ref_str] = mapped_quotes
